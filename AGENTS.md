@@ -16,7 +16,7 @@ The goal of pwm is to automate common engineering tasks while maintaining a modu
 ## Development Environment
 
 **Tooling:**
-- Python 3.10 or newer
+- Python 3.11 or newer
 - pip or pipx for dependency management
 - pytest for testing
 - git for CLI-level integrations
@@ -44,6 +44,11 @@ The goal of pwm is to automate common engineering tasks while maintaining a modu
 
 ## Common Commands
 
+**Show project context**
+```bash
+pwm context
+```
+
 **Initialize a project**
 ```bash
 pwm init
@@ -70,7 +75,7 @@ pytest --cov=pwm --cov-report=term-missing
 
 ## Coding Conventions
 
-- Language: Python 3.10+
+- Language: Python 3.11+
 - Formatting: Follow PEP8; prefer Black-compatible formatting.
 - File Naming: Use snake_case for modules and files.
 - Constants: Use ALL_CAPS for constant variables.

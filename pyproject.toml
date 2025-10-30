@@ -4,7 +4,7 @@ name = "pwm"
 version = "0.1.0"
 description = "Personal Workflow Manager (Jira/GitHub/Git integrations)"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "You" }]
 

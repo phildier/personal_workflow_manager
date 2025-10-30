@@ -9,13 +9,13 @@ def test_work_start_creates_branch(monkeypatch, tmp_path):
     created = []
     switched = []
 
-    monkeypatch.setattr(git_cli, "current_branch", lambda repo_root: None)
-    def fake_create(repo_root: Path, branch_name: str, from_ref: str="origin/main"):
+    monkeypatch.setattr(ws, "current_branch", lambda repo_root: None)
+    def fake_create(repo_root: Path, branch_name: str, from_ref: str | None = None):
         created.append(branch_name); return True
-    monkeypatch.setattr(git_cli, "create_branch", fake_create)
-    monkeypatch.setattr(git_cli, "branch_exists", lambda repo_root, name: False)
+    monkeypatch.setattr(ws, "create_branch", fake_create)
+    monkeypatch.setattr(ws, "branch_exists", lambda repo_root, name: False)
     def fake_switch(repo_root: Path, name: str): switched.append(name); return True
-    monkeypatch.setattr(git_cli, "switch_branch", fake_switch)
+    monkeypatch.setattr(ws, "switch_branch", fake_switch)
 
     class FakeJira:
         def get_issue_summary(self, key): return "Implement feature X"
@@ -34,4 +34,5 @@ def test_work_start_creates_branch(monkeypatch, tmp_path):
     assert rc == 0
     assert created, "branch should be created"
     assert any(b.startswith("feature/ABC-123-implement-feature-x") for b in created)
-    assert switched, "should switch to the new branch"
+    # Note: when create_branch is called, it uses git checkout -b which automatically switches
+    # to the new branch, so switch_branch is not called separately

@@ -24,7 +24,7 @@ pip install -e .
 pipx install -e .
 ```
 
-Requires Python 3.10 or newer.
+Requires Python 3.11 or newer.
 
 ----------------------------------------
 
@@ -43,6 +43,9 @@ Environment variable overrides (recommended for tokens):
 ----------------------------------------
 
 ## Commands
+
+### pwm context
+Show resolved project context including repository root, GitHub repo, Jira project key, and configuration file paths with their sources.
 
 ### pwm init
 Initialize a `.pwm.toml` for the current repository. Prompts for Jira project key, GitHub repo, and branch naming pattern. Defaults to the current GitHub remote if detected.

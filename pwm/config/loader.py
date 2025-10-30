@@ -5,11 +5,7 @@ from typing import Dict, Any
 import os
 
 from pwm.config.models import PWMConfig
-
-try:
-    import tomllib as _toml
-except Exception:
-    import tomli as _toml  # type: ignore
+import tomllib as _toml
 
 USER_CONFIG_PATH = Path.home() / ".config" / "pwm" / "config.toml"
 PROJECT_CONFIG_BASENAME = ".pwm.toml"
