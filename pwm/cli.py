@@ -5,6 +5,8 @@ from rich.table import Table
 
 from pwm.context.resolver import resolve_context
 
+from pwm.commands.init import init_project
+
 app = typer.Typer(help="Personal Workflow Manager")
 
 @app.command()
@@ -24,6 +26,11 @@ def context():
     table.add_row("config_source", ctx.meta.source_summary)
 
     rprint(table)
+
+@app.command()
+def init():
+    """Scaffold a .pwm.toml in the current project."""
+    init_project()
 
 if __name__ == "__main__":
     app()
