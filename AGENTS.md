@@ -65,6 +65,13 @@ pwm work-start ABC-123 --no-transition --no-comment
 pwm self-check
 ```
 
+**Show prompt info (for shell integration)**
+```bash
+pwm prompt
+pwm prompt --with-status --color
+pwm prompt --format emoji
+```
+
 **Run tests**
 ```bash
 pytest
