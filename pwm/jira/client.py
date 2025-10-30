@@ -20,6 +20,21 @@ class JiraClient:
     def _client(self) -> httpx.Client:
         return httpx.Client(auth=(self.email, self.token), timeout=20.0)
 
+    def ping(self) -> tuple[bool, str]:
+        url = f"{self.base_url}/rest/api/3/myself"
+        try:
+            with self._client() as c:
+                r = c.get(url)
+        except Exception as e:
+            return False, f"network error: {e}"
+        if r.status_code == 200:
+            acc = r.json().get("displayName") or r.json().get("emailAddress", "<unknown>")
+            return True, f"ok (as {acc})"
+        elif r.status_code == 401:
+            return False, "unauthorized (bad token)"
+        else:
+            return False, f"HTTP {r.status_code}"
+
     def get_issue(self, key: str) -> Optional[dict]:
         url = f"{self.base_url}/rest/api/3/issue/{key}"
         with self._client() as c:

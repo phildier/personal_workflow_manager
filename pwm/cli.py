@@ -4,6 +4,7 @@ from rich import print as rprint
 from rich.table import Table
 
 from pwm.context.resolver import resolve_context
+from pwm.check.self_check import self_check
 from pwm.commands.init import init_project
 from pwm.work.start import work_start
 
@@ -42,3 +43,9 @@ def work_start_cmd(issue_key: str, no_transition: bool = typer.Option(False, hel
                    no_comment: bool = typer.Option(False, help="Do not add Jira comment")):
     """Start work on a Jira issue: create/switch branch and (optionally) update Jira."""
     work_start(issue_key, transition=not no_transition, comment=not no_comment)
+
+
+@app.command("self-check")
+def self_check_cmd() -> None:
+    """Run connectivity & setup checks for git, Jira, and GitHub."""
+    raise SystemExit(self_check())
