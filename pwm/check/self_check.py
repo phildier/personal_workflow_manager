@@ -1,3 +1,4 @@
+
 from __future__ import annotations
 from pathlib import Path
 from rich import print as rprint
@@ -9,7 +10,6 @@ from pwm.jira.client import JiraClient
 from pwm.github.client import GitHubClient
 
 def self_check() -> int:
-    """Run connectivity & setup checks for git, Jira, and GitHub."""
     git_ok = False
     git_msg = ""
     try:
@@ -29,7 +29,6 @@ def self_check() -> int:
     except Exception:
         ctx = None
 
-    # Jira
     jira_ok = False
     jira_status = "<skipped>"
     jira_hint = ""
@@ -46,7 +45,6 @@ def self_check() -> int:
     else:
         jira_status = "context resolution failed"
 
-    # GitHub
     gh_ok = False
     gh_status = "<skipped>"
     gh_hint = ""

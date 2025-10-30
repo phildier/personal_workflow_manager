@@ -1,3 +1,4 @@
+
 from __future__ import annotations
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
@@ -5,14 +6,14 @@ from typing import Optional, Dict, Any
 class JiraConfig(BaseModel):
     base_url: Optional[str] = None
     email: Optional[str] = None
-    token: Optional[str] = None  # can be read from env
+    token: Optional[str] = None
     project_key: Optional[str] = None
 
 class GithubConfig(BaseModel):
     base_url: Optional[str] = None
     token: Optional[str] = None
     default_org: Optional[str] = None
-    repo: Optional[str] = None  # org/repo override
+    repo: Optional[str] = None
 
 class GitConfig(BaseModel):
     default_remote: str = "origin"

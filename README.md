@@ -1,3 +1,4 @@
+
 # pwm - Personal Workflow Manager
 
 pwm is a Python-based command-line tool designed to streamline daily developer workflows by integrating with Jira, Git, and GitHub.
@@ -32,23 +33,6 @@ Requires Python 3.10 or newer.
 Global config: `~/.config/pwm/config.toml`  
 Project config: `<repo>/.pwm.toml`  
 
-Example global config:
-
-```toml
-[jira]
-base_url = "https://yourcompany.atlassian.net"
-email = "you@company.com"
-
-[github]
-default_org = "your-org"
-
-[git]
-default_remote = "origin"
-
-[branch]
-pattern = "feature/{issue_key}-{slug}"
-```
-
 Environment variable overrides (recommended for tokens):
 
 | Service | Variables |
@@ -61,56 +45,30 @@ Environment variable overrides (recommended for tokens):
 ## Commands
 
 ### pwm init
-Initialize a `.pwm.toml` for the current repository.
-
-```bash
-pwm init
-```
-
-Prompts for Jira project key, GitHub repo, and branch naming pattern.  
-Defaults to the current GitHub remote if detected.
-
-----------------------------------------
+Initialize a `.pwm.toml` for the current repository. Prompts for Jira project key, GitHub repo, and branch naming pattern. Defaults to the current GitHub remote if detected.
 
 ### pwm work-start <ISSUE>
 Start work on a Jira issue: create or switch branches and update Jira.
-
-```bash
+```
 pwm work-start ABC-123
-# Optional flags
 pwm work-start ABC-123 --no-transition --no-comment
 ```
 
-Outputs a summary of created branches and Jira updates.
-
-----------------------------------------
-
 ### pwm self-check
-Validate connections to Git, Jira, and GitHub.
-
-```bash
-pwm self-check
-```
-
-Displays a diagnostic table with status and configuration hints.
+Validate connections to Git, Jira, and GitHub and show remediation hints.
 
 ----------------------------------------
 
-## Project Structure
+## Testing
 
+Run unit tests:
 ```
-pwm/
-  cli.py               # Typer CLI entrypoint
-  context/             # Context resolver (repo root, configs)
-  config/              # Pydantic models and loader
-  commands/            # init command
-  vcs/                 # Git CLI helpers
-  jira/                # Jira API client
-  github/              # GitHub API client
-  work/                # Work management (for example, work-start)
-  check/               # Self-check diagnostics
-tests/
-pyproject.toml
+pytest
+```
+
+Optional coverage:
+```
+pytest --cov=pwm --cov-report=term-missing
 ```
 
 ----------------------------------------

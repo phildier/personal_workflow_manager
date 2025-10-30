@@ -1,3 +1,4 @@
+
 from __future__ import annotations
 from pathlib import Path
 from rich import print as rprint
@@ -11,18 +12,13 @@ def work_start(issue_key: str, transition: bool = True, comment: bool = True) ->
     ctx = resolve_context()
     repo_root = ctx.repo_root
 
-    # Get summary if possible (Jira configured)
     jira = JiraClient.from_config(ctx.config)
-    summary = None
-    if jira:
-        summary = jira.get_issue_summary(issue_key)
+    summary = jira.get_issue_summary(issue_key) if jira else None
 
-    # Build branch name using config pattern
     slug = slugify(summary or issue_key)
     pattern = ctx.config.get("branch", {}).get("pattern") or "feature/{issue_key}-{slug}"
     branch_name = pattern.format(issue_key=issue_key, slug=slug)
 
-    # Idempotent behavior
     current = current_branch(repo_root)
     created = False
     switched = False
@@ -34,7 +30,6 @@ def work_start(issue_key: str, transition: bool = True, comment: bool = True) ->
         created = create_branch(repo_root, branch_name)
         switched = True if created else False
 
-    # Jira actions
     transitioned = False
     commented = False
     if jira:
@@ -43,7 +38,6 @@ def work_start(issue_key: str, transition: bool = True, comment: bool = True) ->
         if comment:
             commented = jira.add_comment(issue_key, f"Started work on branch `{branch_name}`") or False
 
-    # Output summary
     table = Table(title="pwm work start")
     table.add_column("Action", style="bold cyan")
     table.add_column("Result", style="white")
@@ -51,7 +45,7 @@ def work_start(issue_key: str, transition: bool = True, comment: bool = True) ->
     table.add_row("Branch created", "yes" if created else "no")
     table.add_row("Switched to branch", "yes" if (switched or current == branch_name) else "no")
     table.add_row("Jira summary", summary or "<unknown>")
-    table.add_row("Jira transitioned → In Progress", ("yes" if transitioned else "no") if jira else "<skipped>")
+    table.add_row("Jira transitioned -> In Progress", ("yes" if transitioned else "no") if jira else "<skipped>")
     table.add_row("Jira comment added", ("yes" if commented else "no") if jira else "<skipped>")
     rprint(table)
 

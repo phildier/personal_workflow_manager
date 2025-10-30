@@ -1,3 +1,4 @@
+
 from pathlib import Path
 import typer
 from rich.prompt import Prompt, Confirm
@@ -22,7 +23,6 @@ def init_project():
             rprint("[green]Aborted.[/green]")
             raise typer.Exit()
 
-    # Inferred defaults
     inferred_repo = infer_github_repo_from_remote(repo_root, "origin")
     default_branch_pattern = "feature/{issue_key}-{slug}"
 

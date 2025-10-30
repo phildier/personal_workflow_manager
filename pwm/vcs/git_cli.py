@@ -1,3 +1,4 @@
+
 from __future__ import annotations
 from pathlib import Path
 import subprocess
@@ -21,9 +22,7 @@ def branch_exists(repo_root: Path, branch_name: str) -> bool:
     r = _run(["rev-parse", "--verify", branch_name], repo_root)
     return r.returncode == 0
 
-
 def infer_github_repo_from_remote(repo_root: Path, remote: str = "origin") -> str | None:
-    """Infer org/repo from a git remote URL (ssh or https)."""
     r = _run(["remote", "get-url", remote], repo_root)
     if r.returncode != 0:
         return None
