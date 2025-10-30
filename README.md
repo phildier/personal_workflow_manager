@@ -60,6 +60,29 @@ pwm work-start ABC-123 --no-transition --no-comment
 ### pwm self-check
 Validate connections to Git, Jira, and GitHub and show remediation hints.
 
+### pwm prompt
+Generate shell prompt information showing current Jira issue from branch name. Use this in your PS1/PROMPT for at-a-glance work context.
+
+**Options:**
+- `--with-status`: Fetch and display current Jira status (cached for 5 minutes)
+- `--format [default|minimal|emoji]`: Choose output style
+  - `default`: `[ABC-123]` or `[ABC-123: In Progress]`
+  - `minimal`: `ABC-123` or `ABC-123: In Progress`
+  - `emoji`: `🔹 ABC-123` or `🎯 ABC-123` (status-based emoji)
+- `--color`: Use ANSI color codes (status-based colors)
+
+**Shell integration:**
+```bash
+# Bash (~/.bashrc)
+export PS1='${debian_chroot:+($debian_chroot)}\u@\h:\w$(pwm prompt 2>/dev/null)\$ '
+
+# With color and status (slower due to API call)
+export PS1='${debian_chroot:+($debian_chroot)}\u@\h:\w$(pwm prompt --with-status --color 2>/dev/null)\$ '
+
+# Zsh (~/.zshrc)
+PROMPT='%n@%h:%~$(pwm prompt 2>/dev/null)%# '
+```
+
 ----------------------------------------
 
 ## Testing

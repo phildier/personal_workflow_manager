@@ -6,6 +6,7 @@ from rich.table import Table
 
 from pwm.context.resolver import resolve_context
 from pwm.commands.init import init_project
+from pwm.commands.prompt import prompt_command, PromptFormat
 from pwm.work.start import work_start
 from pwm.check.self_check import self_check
 
@@ -41,6 +42,15 @@ def work_start_cmd(issue_key: str, no_transition: bool = typer.Option(False, hel
 def self_check_cmd() -> None:
     """Run connectivity and setup checks for git, Jira, and GitHub."""
     raise SystemExit(self_check())
+
+@app.command()
+def prompt(
+    with_status: bool = typer.Option(False, "--with-status", help="Fetch and display Jira issue status"),
+    format: PromptFormat = typer.Option(PromptFormat.DEFAULT, "--format", help="Output format: default, minimal, or emoji"),
+    color: bool = typer.Option(False, "--color", help="Use ANSI color codes")
+) -> None:
+    """Generate shell prompt information for current work context."""
+    raise SystemExit(prompt_command(with_status=with_status, format_type=format, use_color=color))
 
 if __name__ == "__main__":
     app()
