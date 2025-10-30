@@ -11,7 +11,7 @@ It automatically detects project context, helps create and manage branches tied 
 
 - Project context resolution: auto-detects the current Git repo and loads merged global and project configs.
 - Config initialization: `pwm init` scaffolds `.pwm.toml` with inferred defaults (for example, the GitHub repo).
-- Work start automation: `pwm work-start <ISSUE>` creates or switches to a branch, optionally transitions the Jira issue to In Progress, and adds a Jira comment.
+- Work start automation: `pwm work-start <ISSUE>` creates or switches to a branch, optionally transitions the Jira issue to In Progress, and adds a Jira comment. Use `--new` to create a new Jira issue first.
 - Self-check diagnostics: `pwm self-check` validates Git repo status, Jira API credentials, and GitHub API connectivity with helpful hints for missing environment variables.
 
 ----------------------------------------
@@ -30,8 +30,8 @@ Requires Python 3.11 or newer.
 
 ## Configuration
 
-Global config: `~/.config/pwm/config.toml`  
-Project config: `<repo>/.pwm.toml`  
+Global config: `~/.config/pwm/config.toml`
+Project config: `<repo>/.pwm.toml`
 
 Environment variable overrides (recommended for tokens):
 
@@ -39,6 +39,22 @@ Environment variable overrides (recommended for tokens):
 |----------|------------|
 | Jira | PWM_JIRA_TOKEN, PWM_JIRA_EMAIL, PWM_JIRA_BASE_URL |
 | GitHub | GITHUB_TOKEN or PWM_GITHUB_TOKEN |
+
+**Custom Field Defaults:**
+
+If your Jira project requires custom fields (like "Responsible Team"), you can configure defaults in your config file:
+
+```toml
+[jira.issue_defaults]
+issue_type = "Story"
+labels = ["backend", "api"]
+
+# Custom field for "Responsible Team" (single-select)
+[jira.issue_defaults.custom_fields.customfield_10370]
+value = "Platform Team"
+```
+
+See `example.pwm.toml` for more configuration examples.
 
 ----------------------------------------
 
@@ -50,8 +66,22 @@ Show resolved project context including repository root, GitHub repo, Jira proje
 ### pwm init
 Initialize a `.pwm.toml` for the current repository. Prompts for Jira project key, GitHub repo, and branch naming pattern. Defaults to the current GitHub remote if detected.
 
-### pwm work-start <ISSUE>
+### pwm work-start [ISSUE]
 Start work on a Jira issue: create or switch branches and update Jira.
+
+**Create a new issue:**
+```
+pwm work-start --new
+```
+Interactively creates a new Jira issue, then creates a branch and starts work. Prompts for:
+- Summary (required)
+- Description (optional)
+- Issue type (Story, Task, Bug, etc.)
+- Labels (comma-separated, optional)
+
+Issue type and labels are saved as defaults for next time.
+
+**Work on existing issue:**
 ```
 pwm work-start ABC-123
 pwm work-start ABC-123 --no-transition --no-comment

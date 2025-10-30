@@ -33,10 +33,19 @@ def init():
     init_project()
 
 @app.command("work-start")
-def work_start_cmd(issue_key: str, no_transition: bool = typer.Option(False, help="Do not transition Jira issue"),
-                   no_comment: bool = typer.Option(False, help="Do not add Jira comment")):
+def work_start_cmd(
+    issue_key: str = typer.Argument(None, help="Jira issue key (e.g., ABC-123). Omit if using --new."),
+    new: bool = typer.Option(False, "--new", help="Create a new Jira issue interactively"),
+    no_transition: bool = typer.Option(False, help="Do not transition Jira issue"),
+    no_comment: bool = typer.Option(False, help="Do not add Jira comment")
+):
     """Start work on a Jira issue: create or switch branch and optionally update Jira."""
-    raise SystemExit(work_start(issue_key, transition=not no_transition, comment=not no_comment))
+    raise SystemExit(work_start(
+        issue_key=issue_key,
+        create_new=new,
+        transition=not no_transition,
+        comment=not no_comment
+    ))
 
 @app.command("self-check")
 def self_check_cmd() -> None:

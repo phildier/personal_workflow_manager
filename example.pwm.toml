@@ -1,0 +1,52 @@
+# Example pwm configuration file
+#
+# This file can be placed at:
+# - Global: ~/.config/pwm/config.toml (user-wide defaults)
+# - Project: <repo>/.pwm.toml (project-specific settings)
+#
+# Project config overrides global config.
+# Environment variables override both.
+
+[jira]
+# Jira connection settings (recommended to use environment variables instead)
+# base_url = "https://your-domain.atlassian.net"
+# email = "your.email@example.com"
+# token = "your-api-token"  # DO NOT commit this
+
+# Project key
+project_key = "ABC"
+
+[jira.issue_defaults]
+# Default issue type when creating new issues
+issue_type = "Story"
+
+# Default labels (comma-separated in prompts, array in config)
+labels = ["backend", "api"]
+
+# Custom field defaults - useful for required fields in your Jira project
+# Find custom field IDs by looking at Jira API responses or checking field settings
+# Format: customfield_XXXXX = value (string, object, or array depending on field type)
+
+# Example: Single-select custom field (like "Responsible Team")
+[jira.issue_defaults.custom_fields.customfield_10370]
+value = "Platform Team"
+
+# Example: String custom field
+# customfield_12345 = "Default value"
+
+# Example: Multi-select custom field
+# customfield_67890 = [{ value = "Option1" }, { value = "Option2" }]
+
+[github]
+# GitHub repo (org/repo format)
+repo = "myorg/myrepo"
+
+[branch]
+# Branch naming pattern
+# Available placeholders: {issue_key}, {slug}
+# {slug} is auto-generated from issue summary
+pattern = "{issue_key}-{slug}"
+
+[git]
+# Default remote name
+default_remote = "origin"

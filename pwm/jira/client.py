@@ -78,3 +78,127 @@ class JiraClient:
         with self._client() as c:
             r = c.post(url, json={"body": body})
             return r.status_code in (201, 200)
+
+    def get_issue_types(self, project_key: str) -> list[dict]:
+        """
+        Get available issue types for a project.
+
+        Returns a list of dicts with 'id', 'name', and 'description'.
+        """
+        url = f"{self.base_url}/rest/api/3/issue/createmeta"
+        params = {"projectKeys": project_key, "expand": "projects.issuetypes"}
+        with self._client() as c:
+            r = c.get(url, params=params)
+            if r.status_code != 200:
+                return []
+            data = r.json()
+            projects = data.get("projects", [])
+            if not projects:
+                return []
+            issue_types = projects[0].get("issuetypes", [])
+            return [
+                {
+                    "id": it.get("id"),
+                    "name": it.get("name"),
+                    "description": it.get("description", "")
+                }
+                for it in issue_types
+            ]
+
+    def get_create_metadata(self, project_key: str, issue_type_name: str) -> dict:
+        """
+        Get field metadata for creating an issue.
+
+        Returns a dict with field information including required fields and allowed values.
+        """
+        url = f"{self.base_url}/rest/api/3/issue/createmeta"
+        params = {
+            "projectKeys": project_key,
+            "issuetypeNames": issue_type_name,
+            "expand": "projects.issuetypes.fields"
+        }
+        with self._client() as c:
+            r = c.get(url, params=params)
+            if r.status_code != 200:
+                return {}
+            data = r.json()
+            projects = data.get("projects", [])
+            if not projects:
+                return {}
+            issue_types = projects[0].get("issuetypes", [])
+            if not issue_types:
+                return {}
+            return issue_types[0].get("fields", {})
+
+    def create_issue(
+        self,
+        project_key: str,
+        summary: str,
+        issue_type: str = "Story",
+        description: Optional[str] = None,
+        labels: Optional[list[str]] = None,
+        custom_fields: Optional[dict] = None
+    ) -> Optional[str]:
+        """
+        Create a new Jira issue.
+
+        Args:
+            project_key: Jira project key
+            summary: Issue summary
+            issue_type: Issue type name (e.g., "Story", "Bug")
+            description: Issue description
+            labels: List of labels
+            custom_fields: Dict of custom field IDs to values (e.g., {"customfield_10370": {"value": "Team A"}})
+
+        Returns the issue key (e.g., "ABC-123") if successful, None otherwise.
+        """
+        url = f"{self.base_url}/rest/api/3/issue"
+
+        fields = {
+            "project": {"key": project_key},
+            "summary": summary,
+            "issuetype": {"name": issue_type}
+        }
+
+        if description:
+            # Jira API v3 uses Atlassian Document Format (ADF)
+            fields["description"] = {
+                "type": "doc",
+                "version": 1,
+                "content": [
+                    {
+                        "type": "paragraph",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": description
+                            }
+                        ]
+                    }
+                ]
+            }
+
+        if labels:
+            fields["labels"] = labels
+
+        # Add custom fields
+        if custom_fields:
+            fields.update(custom_fields)
+
+        payload = {"fields": fields}
+
+        try:
+            with self._client() as c:
+                r = c.post(url, json=payload)
+                if r.status_code in (201, 200):
+                    data = r.json()
+                    return data.get("key")
+                else:
+                    # Log the error for debugging
+                    import sys
+                    print(f"[DEBUG] Jira API error {r.status_code}: {r.text}", file=sys.stderr)
+                    return None
+        except Exception as e:
+            import sys
+            print(f"[DEBUG] Exception creating issue: {e}", file=sys.stderr)
+            return None

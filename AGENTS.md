@@ -56,6 +56,10 @@ pwm init
 
 **Start work on a Jira issue**
 ```bash
+# Create a new issue interactively
+pwm work-start --new
+
+# Work on existing issue
 pwm work-start ABC-123
 pwm work-start ABC-123 --no-transition --no-comment
 ```
