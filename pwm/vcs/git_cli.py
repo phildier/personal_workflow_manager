@@ -46,28 +46,30 @@ def get_default_branch(repo_root: Path, remote: str = "origin") -> str:
 
     Strategy:
     1. Try to read from remote HEAD reference (git symbolic-ref)
-    2. Fall back to checking common branch names that exist remotely
-    3. Default to "main" if all else fails
+    2. If not set, automatically configure it (git remote set-head)
+    3. Fall back to checking common branch names that exist remotely
+    4. Default to "main" if all else fails
 
     Returns the default branch name with remote prefix (e.g., "origin/main")
     """
     # Try to get the default branch from remote HEAD
     r = _run(["symbolic-ref", f"refs/remotes/{remote}/HEAD"], repo_root)
-    if r.returncode == 0:
+    if r.returncode == 0 and r.stdout.strip():
         # Output is like "refs/remotes/origin/main"
         ref = r.stdout.strip()
         if ref.startswith(f"refs/remotes/{remote}/"):
             branch = ref[len(f"refs/remotes/{remote}/"):]
             return f"{remote}/{branch}"
 
-    # If remote HEAD is not set, try to set it by fetching remote info
-    _run(["remote", "set-head", remote, "-a"], repo_root, capture=True)
-    r = _run(["symbolic-ref", f"refs/remotes/{remote}/HEAD"], repo_root)
+    # If remote HEAD is not set, try to set it by fetching remote info (suppress stderr)
+    r = _run(["remote", "set-head", remote, "-a"], repo_root, capture=True)
     if r.returncode == 0:
-        ref = r.stdout.strip()
-        if ref.startswith(f"refs/remotes/{remote}/"):
-            branch = ref[len(f"refs/remotes/{remote}/"):]
-            return f"{remote}/{branch}"
+        r = _run(["symbolic-ref", f"refs/remotes/{remote}/HEAD"], repo_root)
+        if r.returncode == 0 and r.stdout.strip():
+            ref = r.stdout.strip()
+            if ref.startswith(f"refs/remotes/{remote}/"):
+                branch = ref[len(f"refs/remotes/{remote}/"):]
+                return f"{remote}/{branch}"
 
     # Fall back to checking for common default branches
     for candidate in ["main", "master", "develop"]:
