@@ -16,7 +16,7 @@ def work_start(issue_key: str, transition: bool = True, comment: bool = True) ->
     summary = jira.get_issue_summary(issue_key) if jira else None
 
     slug = slugify(summary or issue_key)
-    pattern = ctx.config.get("branch", {}).get("pattern") or "feature/{issue_key}-{slug}"
+    pattern = ctx.config.get("branch", {}).get("pattern") or "{issue_key}-{slug}"
     branch_name = pattern.format(issue_key=issue_key, slug=slug)
 
     current = current_branch(repo_root)

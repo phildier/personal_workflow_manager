@@ -24,7 +24,7 @@ def init_project():
             raise typer.Exit()
 
     inferred_repo = infer_github_repo_from_remote(repo_root, "origin")
-    default_branch_pattern = "feature/{issue_key}-{slug}"
+    default_branch_pattern = "{issue_key}-{slug}"
 
     rprint("[bold cyan]Let's set up your project config...[/bold cyan]")
     jira_key = Prompt.ask("Jira project key (e.g., ABC)", default="")

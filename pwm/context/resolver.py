@@ -21,7 +21,7 @@ class Context:
     meta: ContextMeta
 
     def branch_for_issue(self, issue_key: str, summary: str | None = None) -> str:
-        pattern = (self.config.get("branch", {}).get("pattern") or "feature/{issue_key}-{slug}")
+        pattern = (self.config.get("branch", {}).get("pattern") or "{issue_key}-{slug}")
         slug = slugify(summary or issue_key)
         return pattern.format(issue_key=issue_key, slug=slug)
 

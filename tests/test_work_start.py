@@ -25,7 +25,7 @@ def test_work_start_creates_branch(monkeypatch, tmp_path):
 
     repo_root = tmp_path
     (repo_root / ".git").mkdir()
-    config = {"branch": {"pattern": "feature/{issue_key}-{slug}"}}
+    config = {"branch": {"pattern": "{issue_key}-{slug}"}}
     meta = ContextMeta(user_config_path=None, project_config_path=None, source_summary="defaults")
     fake_ctx = Context(repo_root=repo_root, config=config, github_repo="org/repo", jira_project_key="ABC", meta=meta)
     monkeypatch.setattr(ws, "resolve_context", lambda: fake_ctx)
@@ -33,6 +33,6 @@ def test_work_start_creates_branch(monkeypatch, tmp_path):
     rc = ws.work_start("ABC-123", transition=True, comment=True)
     assert rc == 0
     assert created, "branch should be created"
-    assert any(b.startswith("feature/ABC-123-implement-feature-x") for b in created)
+    assert any(b.startswith("ABC-123-implement-feature-x") for b in created)
     # Note: when create_branch is called, it uses git checkout -b which automatically switches
     # to the new branch, so switch_branch is not called separately

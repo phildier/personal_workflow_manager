@@ -19,7 +19,7 @@ class GitConfig(BaseModel):
     default_remote: str = "origin"
 
 class BranchConfig(BaseModel):
-    pattern: str = "feature/{issue_key}-{slug}"
+    pattern: str = "{issue_key}-{slug}"
 
 class UIConfig(BaseModel):
     editor: Optional[str] = None
