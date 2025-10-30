@@ -4,8 +4,8 @@ from rich import print as rprint
 from rich.table import Table
 
 from pwm.context.resolver import resolve_context
-
 from pwm.commands.init import init_project
+from pwm.work.start import work_start
 
 app = typer.Typer(help="Personal Workflow Manager")
 
@@ -27,10 +27,18 @@ def context():
 
     rprint(table)
 
+if __name__ == "__main__":
+    app()
+
+
 @app.command()
 def init():
     """Scaffold a .pwm.toml in the current project."""
     init_project()
 
-if __name__ == "__main__":
-    app()
+
+@app.command("work-start")
+def work_start_cmd(issue_key: str, no_transition: bool = typer.Option(False, help="Do not transition Jira issue"),
+                   no_comment: bool = typer.Option(False, help="Do not add Jira comment")):
+    """Start work on a Jira issue: create/switch branch and (optionally) update Jira."""
+    work_start(issue_key, transition=not no_transition, comment=not no_comment)
