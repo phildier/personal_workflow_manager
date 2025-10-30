@@ -1,0 +1,133 @@
+# AGENTS.md
+
+## Project Overview
+
+The Personal Workflow Manager (pwm) is a Python-based command-line application that integrates with Jira, Git, and GitHub to automate and streamline daily developer workflows.
+
+It provides commands for:
+- Project setup (`pwm init`)
+- Context-aware branch creation and Jira issue tracking (`pwm work-start`)
+- System self-checks for environment validation (`pwm self-check`)
+
+The goal of pwm is to automate common engineering tasks while maintaining a modular, extensible design.
+
+----------------------------------------
+
+## Development Environment
+
+**Tooling:**
+- Python 3.10 or newer
+- pip or pipx for dependency management
+- pytest for testing
+- git for CLI-level integrations
+
+**Installation:**
+1. Clone the repository
+   ```bash
+   git clone <repo-url>
+   cd pwm
+   ```
+2. Install dependencies
+   ```bash
+   pip install -e .
+   ```
+   or
+   ```bash
+   pipx install -e .
+   ```
+3. Verify installation
+   ```bash
+   pwm --help
+   ```
+
+----------------------------------------
+
+## Common Commands
+
+**Initialize a project**
+```bash
+pwm init
+```
+
+**Start work on a Jira issue**
+```bash
+pwm work-start ABC-123
+pwm work-start ABC-123 --no-transition --no-comment
+```
+
+**Run diagnostics**
+```bash
+pwm self-check
+```
+
+**Run tests**
+```bash
+pytest
+pytest --cov=pwm --cov-report=term-missing
+```
+
+----------------------------------------
+
+## Coding Conventions
+
+- Language: Python 3.10+
+- Formatting: Follow PEP8; prefer Black-compatible formatting.
+- File Naming: Use snake_case for modules and files.
+- Constants: Use ALL_CAPS for constant variables.
+- Error Handling: Wrap API and subprocess calls in try/except blocks.
+- Type Hints: Required for all functions and return values.
+- Docstrings: Use PEP257 triple-quoted strings.
+- Imports: Group as standard library, third-party, then local imports.
+
+----------------------------------------
+
+## Architectural Guidance
+
+- **CLI Layer (pwm/cli.py)**  
+  Handles argument parsing (Typer) and delegates logic to modules.
+
+- **Context (pwm/context/)**  
+  Resolves repository root, reads configs, merges env vars.
+
+- **Config (pwm/config/)**  
+  Defines configuration schema with Pydantic models.
+
+- **VCS (pwm/vcs/)**  
+  Provides subprocess-based Git helpers for branch operations and remote detection.
+
+- **Jira (pwm/jira/)**  
+  REST API integration for issue management.
+
+- **GitHub (pwm/github/)**  
+  REST API integration for token validation and PR automation (future feature).
+
+- **Workflows (pwm/work/)**  
+  Manages Jira + Git workflows such as pwm work-start.
+
+- **Diagnostics (pwm/check/self_check.py)**  
+  Validates system connectivity and credentials.
+
+----------------------------------------
+
+## Security Best Practices
+
+- **Tokens and Credentials**
+  - Jira: PWM_JIRA_TOKEN, PWM_JIRA_EMAIL, PWM_JIRA_BASE_URL
+  - GitHub: GITHUB_TOKEN or PWM_GITHUB_TOKEN
+  - Never commit credentials or embed them in source code.
+
+- **Network Handling**
+  - Validate HTTP responses and handle all exceptions.
+
+- **Logging**
+  - Redact secrets and emails in all output.
+
+----------------------------------------
+
+## Other Notes
+
+- Keep README.md, ROADMAP.md, and AGENTS.md synchronized with code updates.
+- Follow Conventional Commits specification for commit messages.
+- Test code should use mocks for Git subprocesses and network operations.
+- Only use dependencies declared in pyproject.toml.
+- Agents can safely modify CLI commands, config loading, and test coverage expansion as long as architecture boundaries are respected.
