@@ -56,6 +56,10 @@ pwm init
 
 **Start work on a Jira issue**
 ```bash
+# Create a new issue interactively
+pwm work-start --new
+
+# Work on existing issue
 pwm work-start ABC-123
 pwm work-start ABC-123 --no-transition --no-comment
 ```
@@ -90,34 +94,45 @@ pytest --cov=pwm --cov-report=term-missing
 - Type Hints: Required for all functions and return values.
 - Docstrings: Use PEP257 triple-quoted strings.
 - Imports: Group as standard library, third-party, then local imports.
+- Line Length: Limit to 85 characters.
 
 ----------------------------------------
 
 ## Architectural Guidance
 
-- **CLI Layer (pwm/cli.py)**  
-  Handles argument parsing (Typer) and delegates logic to modules.
+The codebase follows a domain-based architecture where each directory represents a functional domain:
 
-- **Context (pwm/context/)**  
-  Resolves repository root, reads configs, merges env vars.
+- **CLI Layer (pwm/cli.py)**
+  Handles argument parsing (Typer) and delegates to domain command modules.
 
-- **Config (pwm/config/)**  
+- **Context Domain (pwm/context/)**
+  - `resolver.py`: Resolves repository root, reads configs, merges env vars
+  - `command.py`: Implements the `pwm context` command
+
+- **Setup Domain (pwm/setup/)**
+  - `init.py`: Implements the `pwm init` command for project initialization
+
+- **Work Domain (pwm/work/)**
+  - `start.py`: Implements the `pwm work-start` command
+  - `create_issue.py`: Handles interactive Jira issue creation
+
+- **Check Domain (pwm/check/)**
+  - `self_check.py`: Implements the `pwm self-check` command for diagnostics
+
+- **Prompt Domain (pwm/prompt/)**
+  - `command.py`: Implements the `pwm prompt` command for shell integration
+
+- **Config (pwm/config/)**
   Defines configuration schema with Pydantic models.
 
-- **VCS (pwm/vcs/)**  
+- **VCS (pwm/vcs/)**
   Provides subprocess-based Git helpers for branch operations and remote detection.
 
-- **Jira (pwm/jira/)**  
-  REST API integration for issue management.
+- **Jira (pwm/jira/)**
+  REST API client for issue management, transitions, and comments.
 
-- **GitHub (pwm/github/)**  
-  REST API integration for token validation and PR automation (future feature).
-
-- **Workflows (pwm/work/)**  
-  Manages Jira + Git workflows such as pwm work-start.
-
-- **Diagnostics (pwm/check/self_check.py)**  
-  Validates system connectivity and credentials.
+- **GitHub (pwm/github/)**
+  REST API client for token validation and PR automation (future feature).
 
 ----------------------------------------
 

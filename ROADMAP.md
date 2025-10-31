@@ -6,7 +6,7 @@
 ## Current Features
 
 - pwm init: Interactive project configuration generator with GitHub remote inference.
-- pwm work-start: Create or switch Git branches using a configurable pattern, transition Jira issues, and add comments.
+- pwm work-start: Create or switch Git branches using a configurable pattern, transition Jira issues, and add comments. Supports creating new Jira issues interactively with --new flag.
 - pwm self-check: Validates Git, Jira, and GitHub connectivity with helpful hints.
 - pwm prompt: Shell prompt integration showing current Jira issue with optional status, colors, and emoji.
 

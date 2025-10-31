@@ -3,11 +3,17 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
 
+class JiraIssueDefaults(BaseModel):
+    issue_type: str = "Story"
+    labels: list[str] = Field(default_factory=list)
+    custom_fields: Dict[str, Any] = Field(default_factory=dict)  # e.g., {"customfield_10370": {"value": "Team A"}}
+
 class JiraConfig(BaseModel):
     base_url: Optional[str] = None
     email: Optional[str] = None
     token: Optional[str] = None
     project_key: Optional[str] = None
+    issue_defaults: JiraIssueDefaults = Field(default_factory=JiraIssueDefaults)
 
 class GithubConfig(BaseModel):
     base_url: Optional[str] = None

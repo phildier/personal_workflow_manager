@@ -1,12 +1,9 @@
 
-from pathlib import Path
 import typer
-from rich import print as rprint
-from rich.table import Table
 
-from pwm.context.resolver import resolve_context
-from pwm.commands.init import init_project
-from pwm.commands.prompt import prompt_command, PromptFormat
+from pwm.context.command import show_context
+from pwm.setup.init import init_project
+from pwm.prompt.command import prompt_command, PromptFormat
 from pwm.work.start import work_start
 from pwm.check.self_check import self_check
 
@@ -15,17 +12,7 @@ app = typer.Typer(help="Personal Workflow Manager")
 @app.command()
 def context():
     """Show resolved project context (repo root, GitHub repo, Jira project, config paths)."""
-    ctx = resolve_context()
-    table = Table(title="pwm context", show_lines=False)
-    table.add_column("Key", style="bold cyan")
-    table.add_column("Value", style="white")
-    table.add_row("repo_root", str(ctx.repo_root))
-    table.add_row("github_repo", ctx.github_repo or "<unknown>")
-    table.add_row("jira_project", ctx.jira_project_key or "<unknown>")
-    table.add_row("user_config", str(ctx.meta.user_config_path) if ctx.meta.user_config_path else "<none>")
-    table.add_row("project_config", str(ctx.meta.project_config_path) if ctx.meta.project_config_path else "<none>")
-    table.add_row("config_source", ctx.meta.source_summary)
-    rprint(table)
+    show_context()
 
 @app.command()
 def init():
@@ -33,10 +20,19 @@ def init():
     init_project()
 
 @app.command("work-start")
-def work_start_cmd(issue_key: str, no_transition: bool = typer.Option(False, help="Do not transition Jira issue"),
-                   no_comment: bool = typer.Option(False, help="Do not add Jira comment")):
+def work_start_cmd(
+    issue_key: str = typer.Argument(None, help="Jira issue key (e.g., ABC-123). Omit if using --new."),
+    new: bool = typer.Option(False, "--new", help="Create a new Jira issue interactively"),
+    no_transition: bool = typer.Option(False, help="Do not transition Jira issue"),
+    no_comment: bool = typer.Option(False, help="Do not add Jira comment")
+):
     """Start work on a Jira issue: create or switch branch and optionally update Jira."""
-    raise SystemExit(work_start(issue_key, transition=not no_transition, comment=not no_comment))
+    raise SystemExit(work_start(
+        issue_key=issue_key,
+        create_new=new,
+        transition=not no_transition,
+        comment=not no_comment
+    ))
 
 @app.command("self-check")
 def self_check_cmd() -> None:
