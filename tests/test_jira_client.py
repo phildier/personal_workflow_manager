@@ -34,3 +34,10 @@ def test_get_issue_summary(monkeypatch):
     routes = {"/rest/api/3/issue/ABC-1": FakeResp(200, {"fields": {"summary": "Do the thing"}})}
     monkeypatch.setattr(JiraClient, "_client", lambda self: FakeClient(routes))
     assert jc.get_issue_summary("ABC-1") == "Do the thing"
+
+def test_add_comment_with_link(monkeypatch):
+    jc = JiraClient(base_url="https://example.atlassian.net", email="u", token="t")
+    routes = {"/rest/api/3/issue/ABC-1/comment": FakeResp(201, {"id": "12345"})}
+    monkeypatch.setattr(JiraClient, "_client", lambda self: FakeClient(routes))
+    result = jc.add_comment_with_link("ABC-1", "Status update", "View PR", "https://github.com/org/repo/pull/1")
+    assert result is True

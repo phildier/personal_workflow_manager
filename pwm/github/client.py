@@ -101,22 +101,23 @@ class GitHubClient:
             pass
         return None
 
-    def get_pr_for_branch(self, repo: str, branch: str) -> Optional[dict]:
+    def get_pr_for_branch(self, repo: str, branch: str, state: str = "open") -> Optional[dict]:
         """
-        Get the open PR for a specific branch.
+        Get the PR for a specific branch.
 
         Args:
             repo: Repository in "owner/repo" format
             branch: Branch name
+            state: PR state - "open", "closed", or "all" (default: "open")
 
-        Returns PR object or None if no open PR exists.
+        Returns PR object or None if no PR exists.
         """
         # GitHub expects head in "owner:branch" format
         # Extract owner from repo
         owner = repo.split("/")[0] if "/" in repo else repo
         head = f"{owner}:{branch}"
 
-        prs = self.list_prs(repo, head=head, state="open")
+        prs = self.list_prs(repo, head=head, state=state)
         return prs[0] if prs else None
 
     def get_pr_comments(self, repo: str, pr_number: int) -> list[dict]:

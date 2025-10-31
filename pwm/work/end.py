@@ -111,8 +111,8 @@ def work_end(
         rprint("[cyan]Set GITHUB_TOKEN or PWM_GITHUB_TOKEN environment variable.[/cyan]")
         return 1
 
-    # Check if PR exists
-    pr = github.get_pr_for_branch(github_repo, branch)
+    # Check if PR exists (check both open and closed)
+    pr = github.get_pr_for_branch(github_repo, branch, state="all")
     if not pr:
         rprint(f"[yellow]Error: No pull request found for branch '{branch}'.[/yellow]")
         rprint("[cyan]Create a PR first:[/cyan]")
@@ -158,9 +158,14 @@ def work_end(
         jira = JiraClient.from_config(ctx.config)
         if jira:
             rprint(f"[cyan]Adding comment to Jira {issue_key}...[/cyan]")
-            jira_comment = f"Status update: {summary}\n\nPR: {pr_url}"
 
-            if jira.add_comment(issue_key, jira_comment):
+            # Add comment with clickable link
+            if jira.add_comment_with_link(
+                issue_key,
+                f"Status update: {summary}",
+                f"View PR #{pr_number}",
+                pr_url
+            ):
                 jira_commented = True
                 rprint("[green]✓ Commented on Jira[/green]")
             else:
