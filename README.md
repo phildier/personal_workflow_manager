@@ -108,7 +108,9 @@ Post a status update to both the PR and Jira issue with a summary of recent chan
 
 Analyzes commits and generates a concise 1-2 sentence summary, then posts it to:
 - GitHub PR as a comment
-- Jira issue with PR link
+- Jira issue with clickable PR link
+
+Works with both open and closed/merged PRs.
 
 **Options:**
 - `--message "text"` or `-m "text"`: Use custom message instead of auto-generated summary
