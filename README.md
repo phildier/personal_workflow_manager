@@ -12,6 +12,7 @@ It automatically detects project context, helps create and manage branches tied 
 - Project context resolution: auto-detects the current Git repo and loads merged global and project configs.
 - Config initialization: `pwm init` scaffolds `.pwm.toml` with inferred defaults (for example, the GitHub repo).
 - Work start automation: `pwm work-start <ISSUE>` creates or switches to a branch, optionally transitions the Jira issue to In Progress, and adds a Jira comment. Use `--new` to create a new Jira issue first.
+- Pull request automation: `pwm pr` creates or opens pull requests with auto-generated title and description from commits and Jira context.
 - Self-check diagnostics: `pwm self-check` validates Git repo status, Jira API credentials, and GitHub API connectivity with helpful hints for missing environment variables.
 
 ----------------------------------------
@@ -85,6 +86,20 @@ Issue type and labels are saved as defaults for next time.
 ```
 pwm work-start ABC-123
 pwm work-start ABC-123 --no-transition --no-comment
+```
+
+### pwm pr
+Open or create a pull request for the current branch.
+
+If you're on a branch with a Jira issue key:
+- If a PR already exists, opens it in your browser
+- If no PR exists, creates one with:
+  - Auto-generated title from Jira issue
+  - Description including Jira link, issue description, and commit summary
+  - Automatic push to remote if needed
+
+```
+pwm pr
 ```
 
 ### pwm self-check

@@ -1,0 +1,127 @@
+
+import httpx
+from unittest.mock import Mock, patch
+from pwm.github.client import GitHubClient
+
+
+def test_list_prs_success():
+    """Test listing pull requests."""
+    client = GitHubClient(base_url="https://api.github.com", token="test-token")
+
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = [
+        {"number": 1, "title": "Test PR", "state": "open"},
+        {"number": 2, "title": "Another PR", "state": "open"}
+    ]
+
+    with patch("httpx.Client") as mock_client:
+        mock_client.return_value.__enter__.return_value.get.return_value = mock_response
+
+        prs = client.list_prs("owner/repo", state="open")
+
+        assert len(prs) == 2
+        assert prs[0]["number"] == 1
+        assert prs[1]["title"] == "Another PR"
+
+
+def test_list_prs_with_head_filter():
+    """Test listing PRs filtered by head branch."""
+    client = GitHubClient(base_url="https://api.github.com", token="test-token")
+
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = [
+        {"number": 1, "title": "Test PR", "head": {"ref": "feature-branch"}}
+    ]
+
+    with patch("httpx.Client") as mock_client:
+        mock_client.return_value.__enter__.return_value.get.return_value = mock_response
+
+        prs = client.list_prs("owner/repo", head="owner:feature-branch")
+
+        assert len(prs) == 1
+        assert prs[0]["number"] == 1
+
+
+def test_create_pr_success():
+    """Test creating a pull request."""
+    client = GitHubClient(base_url="https://api.github.com", token="test-token")
+
+    mock_response = Mock()
+    mock_response.status_code = 201
+    mock_response.json.return_value = {
+        "number": 42,
+        "html_url": "https://github.com/owner/repo/pull/42",
+        "title": "Test PR"
+    }
+
+    with patch("httpx.Client") as mock_client:
+        mock_client.return_value.__enter__.return_value.post.return_value = mock_response
+
+        pr = client.create_pr(
+            repo="owner/repo",
+            title="Test PR",
+            head="feature-branch",
+            base="main",
+            body="Test description"
+        )
+
+        assert pr is not None
+        assert pr["number"] == 42
+        assert pr["html_url"] == "https://github.com/owner/repo/pull/42"
+
+
+def test_create_pr_failure():
+    """Test PR creation failure."""
+    client = GitHubClient(base_url="https://api.github.com", token="test-token")
+
+    mock_response = Mock()
+    mock_response.status_code = 422  # Unprocessable Entity
+
+    with patch("httpx.Client") as mock_client:
+        mock_client.return_value.__enter__.return_value.post.return_value = mock_response
+
+        pr = client.create_pr(
+            repo="owner/repo",
+            title="Test PR",
+            head="feature-branch",
+            base="main"
+        )
+
+        assert pr is None
+
+
+def test_get_pr_for_branch_exists():
+    """Test getting PR for a specific branch when it exists."""
+    client = GitHubClient(base_url="https://api.github.com", token="test-token")
+
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = [
+        {"number": 1, "title": "Test PR", "head": {"ref": "feature-branch"}}
+    ]
+
+    with patch("httpx.Client") as mock_client:
+        mock_client.return_value.__enter__.return_value.get.return_value = mock_response
+
+        pr = client.get_pr_for_branch("owner/repo", "feature-branch")
+
+        assert pr is not None
+        assert pr["number"] == 1
+
+
+def test_get_pr_for_branch_not_exists():
+    """Test getting PR for a branch when none exists."""
+    client = GitHubClient(base_url="https://api.github.com", token="test-token")
+
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = []
+
+    with patch("httpx.Client") as mock_client:
+        mock_client.return_value.__enter__.return_value.get.return_value = mock_response
+
+        pr = client.get_pr_for_branch("owner/repo", "feature-branch")
+
+        assert pr is None
