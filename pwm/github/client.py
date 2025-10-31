@@ -120,6 +120,48 @@ class GitHubClient:
         prs = self.list_prs(repo, head=head, state=state)
         return prs[0] if prs else None
 
+    def get_pr_details(self, repo: str, pr_number: int) -> Optional[dict]:
+        """
+        Get detailed PR information including file stats.
+
+        Args:
+            repo: Repository in "owner/repo" format
+            pr_number: PR number
+
+        Returns PR object with additions, deletions, changed_files, etc.
+        """
+        url = f"{self.base_url}/repos/{repo}/pulls/{pr_number}"
+
+        try:
+            with httpx.Client(timeout=10.0) as c:
+                r = c.get(url, headers=self._headers())
+                if r.status_code == 200:
+                    return r.json()
+        except Exception:
+            pass
+        return None
+
+    def get_pr_reviews(self, repo: str, pr_number: int) -> list[dict]:
+        """
+        Get reviews for a pull request.
+
+        Args:
+            repo: Repository in "owner/repo" format
+            pr_number: PR number
+
+        Returns list of review objects with user, state, etc.
+        """
+        url = f"{self.base_url}/repos/{repo}/pulls/{pr_number}/reviews"
+
+        try:
+            with httpx.Client(timeout=10.0) as c:
+                r = c.get(url, headers=self._headers())
+                if r.status_code == 200:
+                    return r.json()
+        except Exception:
+            pass
+        return []
+
     def get_pr_comments(self, repo: str, pr_number: int) -> list[dict]:
         """
         Get comments on a pull request.

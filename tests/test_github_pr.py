@@ -168,3 +168,52 @@ def test_get_pr_for_branch_defaults_to_open():
         # Verify the API was called with state="open"
         call_args = mock_instance.get.call_args
         assert call_args[1]["params"]["state"] == "open"
+
+
+def test_get_pr_details():
+    """Test getting detailed PR information."""
+    client = GitHubClient(base_url="https://api.github.com", token="test-token")
+
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "number": 42,
+        "title": "Test PR",
+        "changed_files": 3,
+        "additions": 150,
+        "deletions": 25
+    }
+
+    with patch("httpx.Client") as mock_client:
+        mock_client.return_value.__enter__.return_value.get.return_value = mock_response
+
+        details = client.get_pr_details("owner/repo", 42)
+
+        assert details is not None
+        assert details["number"] == 42
+        assert details["changed_files"] == 3
+        assert details["additions"] == 150
+        assert details["deletions"] == 25
+
+
+def test_get_pr_reviews():
+    """Test getting PR reviews."""
+    client = GitHubClient(base_url="https://api.github.com", token="test-token")
+
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = [
+        {"user": {"login": "reviewer1"}, "state": "APPROVED"},
+        {"user": {"login": "reviewer2"}, "state": "COMMENTED"}
+    ]
+
+    with patch("httpx.Client") as mock_client:
+        mock_client.return_value.__enter__.return_value.get.return_value = mock_response
+
+        reviews = client.get_pr_reviews("owner/repo", 42)
+
+        assert len(reviews) == 2
+        assert reviews[0]["user"]["login"] == "reviewer1"
+        assert reviews[0]["state"] == "APPROVED"
+        assert reviews[1]["user"]["login"] == "reviewer2"
+        assert reviews[1]["state"] == "COMMENTED"

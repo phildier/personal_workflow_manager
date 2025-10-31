@@ -18,6 +18,46 @@ from pwm.prompt.command import extract_issue_key_from_branch
 from pwm.jira.client import JiraClient
 
 
+def display_pr_info(github: GitHubClient, github_repo: str, pr_number: int, pr_title: str, pr_url: str) -> None:
+    """
+    Display PR information including file stats and reviews.
+
+    Args:
+        github: GitHub client
+        github_repo: Repository in "owner/repo" format
+        pr_number: PR number
+        pr_title: PR title
+        pr_url: PR URL
+    """
+    # Get detailed PR info for file stats
+    pr_details = github.get_pr_details(github_repo, pr_number)
+
+    # Display PR info
+    if pr_details:
+        files_changed = pr_details.get("changed_files", 0)
+        additions = pr_details.get("additions", 0)
+        deletions = pr_details.get("deletions", 0)
+        rprint(f"[green]PR:[/green] {pr_title} [{files_changed} files, +{additions}, -{deletions}]")
+    else:
+        rprint(f"[green]PR:[/green] {pr_title}")
+
+    rprint(pr_url)
+
+    # Get and display reviews if any
+    reviews = github.get_pr_reviews(github_repo, pr_number)
+    if reviews:
+        # Group reviews by user (take most recent per user)
+        user_reviews = {}
+        for review in reviews:
+            user = review.get("user", {}).get("login", "unknown")
+            state = review.get("state", "")
+            if state in ("APPROVED", "COMMENTED"):
+                user_reviews[user] = state
+
+        for user, state in user_reviews.items():
+            rprint(f"- {user}  {state}")
+
+
 def generate_pr_title(issue_key: str, jira: Optional[JiraClient], commits: Optional[list[dict]] = None) -> str:
     """
     Generate a succinct PR title from Jira issue or commit messages.
@@ -148,9 +188,11 @@ def open_pr(open_browser: bool = True) -> int:
     # Check if PR already exists
     existing_pr = github.get_pr_for_branch(github_repo, branch)
     if existing_pr:
+        pr_number = existing_pr["number"]
         pr_url = existing_pr["html_url"]
-        rprint(f"[green]PR already exists:[/green] {pr_url}")
-        rprint(f"[dim]#{existing_pr['number']}: {existing_pr['title']}[/dim]")
+        pr_title = existing_pr["title"]
+
+        display_pr_info(github, github_repo, pr_number, pr_title, pr_url)
 
         if open_browser:
             webbrowser.open(pr_url)
@@ -207,9 +249,10 @@ def open_pr(open_browser: bool = True) -> int:
         rprint("[dim]Check that your GitHub token has the 'repo' scope.[/dim]")
         return 1
 
+    pr_number = pr["number"]
     pr_url = pr["html_url"]
-    rprint(f"[green]✓ PR created successfully![/green]")
-    rprint(f"  {pr_url}")
+
+    display_pr_info(github, github_repo, pr_number, title, pr_url)
 
     if open_browser:
         webbrowser.open(pr_url)
