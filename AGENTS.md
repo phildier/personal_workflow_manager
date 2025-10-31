@@ -7,6 +7,7 @@ The Personal Workflow Manager (pwm) is a Python-based command-line application t
 It provides commands for:
 - Project setup (`pwm init`)
 - Context-aware branch creation and Jira issue tracking (`pwm work-start`)
+- Pull request creation and management (`pwm pr`)
 - System self-checks for environment validation (`pwm self-check`)
 
 The goal of pwm is to automate common engineering tasks while maintaining a modular, extensible design.
@@ -62,6 +63,11 @@ pwm work-start --new
 # Work on existing issue
 pwm work-start ABC-123
 pwm work-start ABC-123 --no-transition --no-comment
+```
+
+**Open or create a pull request**
+```bash
+pwm pr
 ```
 
 **Run diagnostics**
@@ -122,6 +128,9 @@ The codebase follows a domain-based architecture where each directory represents
 - **Prompt Domain (pwm/prompt/)**
   - `command.py`: Implements the `pwm prompt` command for shell integration
 
+- **PR Domain (pwm/pr/)**
+  - `open.py`: Implements the `pwm pr` command for pull request creation
+
 - **Config (pwm/config/)**
   Defines configuration schema with Pydantic models.
 
@@ -132,7 +141,7 @@ The codebase follows a domain-based architecture where each directory represents
   REST API client for issue management, transitions, and comments.
 
 - **GitHub (pwm/github/)**
-  REST API client for token validation and PR automation (future feature).
+  REST API client for token validation and PR creation/management.
 
 ----------------------------------------
 

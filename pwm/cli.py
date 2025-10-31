@@ -6,6 +6,7 @@ from pwm.setup.init import init_project
 from pwm.prompt.command import prompt_command, PromptFormat
 from pwm.work.start import work_start
 from pwm.check.self_check import self_check
+from pwm.pr.open import open_pr
 
 app = typer.Typer(help="Personal Workflow Manager")
 
@@ -47,6 +48,11 @@ def prompt(
 ) -> None:
     """Generate shell prompt information for current work context."""
     raise SystemExit(prompt_command(with_status=with_status, format_type=format, use_color=color))
+
+@app.command()
+def pr() -> None:
+    """Open or create a pull request for the current branch."""
+    raise SystemExit(open_pr())
 
 if __name__ == "__main__":
     app()

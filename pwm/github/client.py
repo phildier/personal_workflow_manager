@@ -37,3 +37,84 @@ class GitHubClient:
             return False, "unauthorized (bad token)"
         else:
             return False, f"HTTP {r.status_code}"
+
+    def list_prs(self, repo: str, head: Optional[str] = None, state: str = "open") -> list[dict]:
+        """
+        List pull requests for a repository.
+
+        Args:
+            repo: Repository in "owner/repo" format
+            head: Filter by head branch (e.g., "owner:branch-name")
+            state: PR state - "open", "closed", or "all"
+
+        Returns list of PR objects with keys: number, title, html_url, head, base, etc.
+        """
+        url = f"{self.base_url}/repos/{repo}/pulls"
+        params = {"state": state}
+        if head:
+            params["head"] = head
+
+        try:
+            with httpx.Client(timeout=10.0) as c:
+                r = c.get(url, headers=self._headers(), params=params)
+                if r.status_code == 200:
+                    return r.json()
+        except Exception:
+            pass
+        return []
+
+    def create_pr(
+        self,
+        repo: str,
+        title: str,
+        head: str,
+        base: str,
+        body: Optional[str] = None
+    ) -> Optional[dict]:
+        """
+        Create a pull request.
+
+        Args:
+            repo: Repository in "owner/repo" format
+            title: PR title
+            head: Branch containing changes
+            base: Base branch to merge into
+            body: PR description (optional)
+
+        Returns PR object with keys: number, html_url, etc., or None on failure.
+        """
+        url = f"{self.base_url}/repos/{repo}/pulls"
+        payload = {
+            "title": title,
+            "head": head,
+            "base": base
+        }
+        if body:
+            payload["body"] = body
+
+        try:
+            with httpx.Client(timeout=10.0) as c:
+                r = c.post(url, headers=self._headers(), json=payload)
+                if r.status_code == 201:
+                    return r.json()
+        except Exception:
+            pass
+        return None
+
+    def get_pr_for_branch(self, repo: str, branch: str) -> Optional[dict]:
+        """
+        Get the open PR for a specific branch.
+
+        Args:
+            repo: Repository in "owner/repo" format
+            branch: Branch name
+
+        Returns PR object or None if no open PR exists.
+        """
+        # GitHub expects head in "owner:branch" format
+        # Extract owner from repo
+        owner = repo.split("/")[0] if "/" in repo else repo
+        head = f"{owner}:{branch}"
+
+        prs = self.list_prs(repo, head=head, state="open")
+        return prs[0] if prs else None
