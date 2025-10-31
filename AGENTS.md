@@ -141,7 +141,7 @@ The codebase follows a domain-based architecture where each directory represents
   REST API client for issue management, transitions, and comments.
 
 - **GitHub (pwm/github/)**
-  REST API client for token validation and PR automation (future feature).
+  REST API client for token validation and PR creation/management.
 
 ----------------------------------------
 
