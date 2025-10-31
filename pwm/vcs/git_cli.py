@@ -1,6 +1,7 @@
 
 from __future__ import annotations
 from pathlib import Path
+from datetime import datetime
 import subprocess
 
 def _run(args: list[str], repo_root: Path, capture: bool = True):
@@ -80,22 +81,40 @@ def get_default_branch(repo_root: Path, remote: str = "origin") -> str:
     # Ultimate fallback
     return f"{remote}/main"
 
-def get_commits_since_base(repo_root: Path, base_branch: Optional[str] = None, remote: str = "origin") -> list[dict]:
+def get_commits_since_base(
+    repo_root: Path,
+    base_branch: Optional[str] = None,
+    remote: str = "origin",
+    since: Optional[datetime] = None
+) -> list[dict]:
     """
     Get list of commits on current branch since it diverged from base branch.
 
-    Returns list of dicts with 'hash', 'subject', 'body' keys.
+    Args:
+        repo_root: Repository root path
+        base_branch: Base branch to compare against (default: uses default branch)
+        remote: Remote name (default: "origin")
+        since: Only include commits after this timestamp (default: all commits)
+
+    Returns list of dicts with 'hash', 'subject', 'body', 'timestamp' keys.
     """
     if base_branch is None:
         base_branch = get_default_branch(repo_root, remote)
 
     # Get commits between base and HEAD
-    # Format: %H = full hash, %s = subject, %b = body, separated by special markers
-    r = _run([
+    # Format: %H = full hash, %s = subject, %b = body, %ct = committer timestamp (Unix), separated by special markers
+    args = [
         "log",
         f"{base_branch}..HEAD",
-        "--format=%H%x00%s%x00%b%x1e"
-    ], repo_root)
+        "--format=%H%x00%s%x00%b%x00%ct%x1e"
+    ]
+
+    # Add --since filter if timestamp provided
+    if since:
+        # Convert datetime to Unix timestamp for git log --since
+        args.append(f"--since={int(since.timestamp())}")
+
+    r = _run(args, repo_root)
 
     if r.returncode != 0:
         return []
@@ -105,13 +124,20 @@ def get_commits_since_base(repo_root: Path, base_branch: Optional[str] = None, r
         entry = entry.strip()
         if not entry:
             continue
-        parts = entry.split("\x00", 2)
+        parts = entry.split("\x00", 3)
         if len(parts) >= 2:
-            commits.append({
+            commit_dict = {
                 "hash": parts[0],
                 "subject": parts[1],
                 "body": parts[2] if len(parts) > 2 else ""
-            })
+            }
+            # Add timestamp if available
+            if len(parts) > 3:
+                try:
+                    commit_dict["timestamp"] = datetime.fromtimestamp(int(parts[3]))
+                except (ValueError, OSError):
+                    pass
+            commits.append(commit_dict)
 
     return commits
 

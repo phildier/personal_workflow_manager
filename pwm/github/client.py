@@ -2,6 +2,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional, Tuple
+from datetime import datetime
 import httpx
 
 DEFAULT_GH_API = "https://api.github.com"
@@ -240,3 +241,33 @@ class GitHubClient:
         except Exception:
             pass
         return False
+
+    def get_last_pwm_comment_time(self, repo: str, pr_number: int) -> Optional[datetime]:
+        """
+        Get the timestamp of the most recent pwm-generated comment on a PR.
+
+        Looks for comments containing the marker "<!-- pwm:work-end -->" and
+        returns the created_at timestamp of the most recent one.
+
+        Args:
+            repo: Repository in "owner/repo" format
+            pr_number: PR number
+
+        Returns datetime of the most recent pwm comment, or None if no pwm comments found.
+        """
+        comments = self.get_pr_comments(repo, pr_number)
+
+        pwm_comments = []
+        for comment in comments:
+            body = comment.get("body", "")
+            if "<!-- pwm:work-end -->" in body:
+                created_at_str = comment.get("created_at")
+                if created_at_str:
+                    try:
+                        # GitHub returns ISO 8601 format: "2024-01-15T10:30:45Z"
+                        created_at = datetime.fromisoformat(created_at_str.replace("Z", "+00:00"))
+                        pwm_comments.append(created_at)
+                    except Exception:
+                        continue
+
+        return max(pwm_comments) if pwm_comments else None

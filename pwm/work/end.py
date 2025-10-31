@@ -15,23 +15,16 @@ from pwm.prompt.command import extract_issue_key_from_branch
 def get_commits_since_timestamp(
     repo_root: Path,
     since: Optional[datetime],
-    base_branch: Optional[str] = None
+    base_branch: Optional[str] = None,
+    remote: str = "origin"
 ) -> list[dict]:
     """
     Get commits since a specific timestamp.
 
     If since is None, returns all commits since base branch.
     """
-    all_commits = get_commits_since_base(repo_root, base_branch)
-
-    if since is None:
-        return all_commits
-
-    # Filter commits by timestamp
-    # Note: This is simplified - in production you'd use git log --since
-    # For now, return all commits if we have a timestamp
-    # (git commit objects don't include timestamps in our current implementation)
-    return all_commits
+    # Use the updated get_commits_since_base with timestamp filtering
+    return get_commits_since_base(repo_root, base_branch, remote, since)
 
 
 def generate_work_summary(commits: list[dict]) -> str:
@@ -128,12 +121,19 @@ def work_end(
     # Get configured remote
     remote = ctx.config.get("git", {}).get("default_remote", "origin")
 
-    # Get commits since last comment (simplified: get all commits for now)
-    # In future, could track last comment timestamp
-    commits = get_commits_since_base(repo_root, remote=remote)
+    # Get last pwm comment timestamp for smart commit tracking
+    last_comment_time = github.get_last_pwm_comment_time(github_repo, pr_number)
+    if last_comment_time:
+        rprint(f"[dim]Last update: {last_comment_time.strftime('%Y-%m-%d %H:%M:%S UTC')}[/dim]")
+
+    # Get commits since last comment (or all commits if no previous comment)
+    commits = get_commits_since_base(repo_root, remote=remote, since=last_comment_time)
 
     if not commits:
-        rprint("[yellow]Warning: No commits found on this branch.[/yellow]")
+        if last_comment_time:
+            rprint("[yellow]No new commits since last update.[/yellow]")
+        else:
+            rprint("[yellow]Warning: No commits found on this branch.[/yellow]")
 
     # Generate or use custom message
     if message:
@@ -147,7 +147,8 @@ def work_end(
     pr_commented = False
     if not no_comment and not no_pr_comment:
         rprint(f"[cyan]Adding comment to PR #{pr_number}...[/cyan]")
-        comment_body = f"**Status Update**\n\n{summary}"
+        # Add hidden marker for smart commit tracking
+        comment_body = f"<!-- pwm:work-end -->\n**Status Update**\n\n{summary}"
 
         if github.add_pr_comment(github_repo, pr_number, comment_body):
             pr_commented = True
