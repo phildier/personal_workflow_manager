@@ -203,13 +203,16 @@ def open_pr(open_browser: bool = True) -> int:
     # No existing PR - create one
     rprint(f"[cyan]No PR exists for branch '{branch}'[/cyan]")
 
+    # Get configured remote
+    remote = ctx.config.get("git", {}).get("default_remote", "origin")
+
     # Get base branch
-    base_branch_ref = get_default_branch(repo_root)
+    base_branch_ref = get_default_branch(repo_root, remote)
     # Extract just the branch name (remove "origin/" prefix)
     base_branch = base_branch_ref.split("/")[-1] if "/" in base_branch_ref else base_branch_ref
 
     # Get commits
-    commits = get_commits_since_base(repo_root, base_branch_ref)
+    commits = get_commits_since_base(repo_root, base_branch_ref, remote)
     if not commits:
         rprint("[yellow]Warning: No commits found on this branch.[/yellow]")
         create_anyway = Confirm.ask("Create PR anyway?", default=False)
@@ -218,7 +221,7 @@ def open_pr(open_browser: bool = True) -> int:
 
     # Ensure branch is pushed
     rprint(f"[cyan]Pushing branch '{branch}' to remote...[/cyan]")
-    if not push_branch(repo_root, branch):
+    if not push_branch(repo_root, branch, remote):
         rprint("[red]Error: Failed to push branch to remote.[/red]")
         return 1
 

@@ -53,6 +53,9 @@ def work_start(
     pattern = ctx.config.get("branch", {}).get("pattern") or "{issue_key}-{slug}"
     branch_name = pattern.format(issue_key=issue_key, slug=slug)
 
+    # Get configured remote
+    remote = ctx.config.get("git", {}).get("default_remote", "origin")
+
     current = current_branch(repo_root)
     created = False
     switched = False
@@ -61,7 +64,7 @@ def work_start(
     elif branch_exists(repo_root, branch_name):
         switched = switch_branch(repo_root, branch_name)
     else:
-        created = create_branch(repo_root, branch_name)
+        created = create_branch(repo_root, branch_name, remote=remote)
         switched = True if created else False
 
     transitioned = False

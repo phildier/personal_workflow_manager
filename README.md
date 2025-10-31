@@ -42,6 +42,19 @@ Environment variable overrides (recommended for tokens):
 | Jira | PWM_JIRA_TOKEN, PWM_JIRA_EMAIL, PWM_JIRA_BASE_URL |
 | GitHub | GITHUB_TOKEN or PWM_GITHUB_TOKEN |
 
+**Git Configuration:**
+
+```toml
+[git]
+# Configure which remote to use for operations (default: "origin")
+default_remote = "origin"
+```
+
+The `default_remote` setting controls which Git remote pwm uses for:
+- Determining the default branch when creating new branches
+- Pushing branches to remote
+- Inferring the GitHub repository
+
 **Custom Field Defaults:**
 
 If your Jira project requires custom fields (like "Responsible Team"), you can configure defaults in your config file:
@@ -80,8 +93,11 @@ Interactively creates a new Jira issue, then creates a branch and starts work. P
 - Description (optional)
 - Issue type (Story, Task, Bug, etc.)
 - Labels (comma-separated, optional)
+- Any required custom fields returned by your Jira instance
 
-Issue type and labels are saved as defaults for next time.
+Issue type, labels, and custom field values can optionally be saved as defaults for next time.
+
+Note: `--new` requires Jira to be configured. See Configuration section above.
 
 **Work on existing issue:**
 ```
@@ -89,15 +105,24 @@ pwm work-start ABC-123
 pwm work-start ABC-123 --no-transition --no-comment
 ```
 
+**Jira integration:**
+- Jira transitions (to "In Progress") and comments run only when Jira credentials are configured
+- When Jira is not configured, these operations are skipped and reported as such
+- Branch creation always works, regardless of Jira configuration
+
 ### pwm pr
 Open or create a pull request for the current branch.
 
 If you're on a branch with a Jira issue key:
 - If a PR already exists, opens it in your browser
 - If no PR exists, creates one with:
-  - Auto-generated title from Jira issue
+  - Auto-generated title (from Jira issue if available, otherwise from first commit)
   - Description including Jira link, issue description, and commit summary
   - Automatic push to remote if needed
+
+**Jira integration:**
+- Jira links and issue descriptions appear in PR description only when Jira is configured and API calls succeed
+- If Jira is not configured, PR is still created with commit-based title and description
 
 ```
 pwm pr
@@ -107,10 +132,14 @@ pwm pr
 Post a status update to both the PR and Jira issue with a summary of recent changes.
 
 Analyzes commits and generates a concise 1-2 sentence summary, then posts it to:
-- GitHub PR as a comment
-- Jira issue with clickable PR link
+- GitHub PR as a comment (always, when GitHub is configured)
+- Jira issue with clickable PR link (only when Jira is configured)
 
 Works with both open and closed/merged PRs.
+
+**Jira integration:**
+- Jira comments are skipped when Jira is not configured
+- GitHub PR comments work independently of Jira configuration
 
 **Options:**
 - `--message "text"` or `-m "text"`: Use custom message instead of auto-generated summary

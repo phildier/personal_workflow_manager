@@ -23,6 +23,7 @@ def init_project():
             rprint("[green]Aborted.[/green]")
             raise typer.Exit()
 
+    # Try to infer from "origin" since config doesn't exist yet during init
     inferred_repo = infer_github_repo_from_remote(repo_root, "origin")
     default_branch_pattern = "{issue_key}-{slug}"
 

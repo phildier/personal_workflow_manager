@@ -125,9 +125,12 @@ def work_end(
     rprint(f"[cyan]Found PR #{pr_number}:[/cyan] {pr['title']}")
     rprint(f"[dim]{pr_url}[/dim]")
 
+    # Get configured remote
+    remote = ctx.config.get("git", {}).get("default_remote", "origin")
+
     # Get commits since last comment (simplified: get all commits for now)
     # In future, could track last comment timestamp
-    commits = get_commits_since_base(repo_root)
+    commits = get_commits_since_base(repo_root, remote=remote)
 
     if not commits:
         rprint("[yellow]Warning: No commits found on this branch.[/yellow]")

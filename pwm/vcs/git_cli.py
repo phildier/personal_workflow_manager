@@ -10,9 +10,9 @@ def current_branch(repo_root: Path) -> str | None:
     r = _run(["rev-parse", "--abbrev-ref", "HEAD"], repo_root)
     return r.stdout.strip() if r.returncode == 0 else None
 
-def create_branch(repo_root: Path, branch_name: str, from_ref: str | None = None) -> bool:
+def create_branch(repo_root: Path, branch_name: str, from_ref: str | None = None, remote: str = "origin") -> bool:
     if from_ref is None:
-        from_ref = get_default_branch(repo_root)
+        from_ref = get_default_branch(repo_root, remote)
     r = _run(["checkout", "-b", branch_name, from_ref], repo_root, capture=False)
     return r.returncode == 0
 
@@ -80,14 +80,14 @@ def get_default_branch(repo_root: Path, remote: str = "origin") -> str:
     # Ultimate fallback
     return f"{remote}/main"
 
-def get_commits_since_base(repo_root: Path, base_branch: Optional[str] = None) -> list[dict]:
+def get_commits_since_base(repo_root: Path, base_branch: Optional[str] = None, remote: str = "origin") -> list[dict]:
     """
     Get list of commits on current branch since it diverged from base branch.
 
     Returns list of dicts with 'hash', 'subject', 'body' keys.
     """
     if base_branch is None:
-        base_branch = get_default_branch(repo_root)
+        base_branch = get_default_branch(repo_root, remote)
 
     # Get commits between base and HEAD
     # Format: %H = full hash, %s = subject, %b = body, separated by special markers
@@ -115,12 +115,12 @@ def get_commits_since_base(repo_root: Path, base_branch: Optional[str] = None) -
 
     return commits
 
-def get_diff_since_base(repo_root: Path, base_branch: Optional[str] = None) -> str:
+def get_diff_since_base(repo_root: Path, base_branch: Optional[str] = None, remote: str = "origin") -> str:
     """
     Get the full diff of changes since base branch.
     """
     if base_branch is None:
-        base_branch = get_default_branch(repo_root)
+        base_branch = get_default_branch(repo_root, remote)
 
     r = _run(["diff", f"{base_branch}...HEAD"], repo_root)
     return r.stdout if r.returncode == 0 else ""

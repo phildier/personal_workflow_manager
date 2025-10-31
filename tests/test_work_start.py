@@ -11,7 +11,7 @@ def test_work_start_creates_branch(monkeypatch, tmp_path):
     switched = []
 
     monkeypatch.setattr(ws, "current_branch", lambda repo_root: None)
-    def fake_create(repo_root: Path, branch_name: str, from_ref: str | None = None):
+    def fake_create(repo_root: Path, branch_name: str, from_ref: str | None = None, remote: str = "origin"):
         created.append(branch_name); return True
     monkeypatch.setattr(ws, "create_branch", fake_create)
     monkeypatch.setattr(ws, "branch_exists", lambda repo_root, name: False)
@@ -45,7 +45,7 @@ def test_work_start_with_new_flag(monkeypatch, tmp_path):
 
     # Mock git operations
     monkeypatch.setattr(ws, "current_branch", lambda repo_root: None)
-    def fake_create(repo_root: Path, branch_name: str, from_ref: str | None = None):
+    def fake_create(repo_root: Path, branch_name: str, from_ref: str | None = None, remote: str = "origin"):
         created.append(branch_name); return True
     monkeypatch.setattr(ws, "create_branch", fake_create)
     monkeypatch.setattr(ws, "branch_exists", lambda repo_root, name: False)

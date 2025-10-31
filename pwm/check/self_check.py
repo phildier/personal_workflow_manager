@@ -17,7 +17,13 @@ def self_check() -> int:
         cur = current_branch(repo_root)
         if cur:
             git_ok = True
-            inferred = infer_github_repo_from_remote(repo_root) or "<none>"
+            # Try to resolve context to get configured remote, fallback to "origin"
+            try:
+                ctx_temp = resolve_context()
+                remote = ctx_temp.config.get("git", {}).get("default_remote", "origin")
+            except Exception:
+                remote = "origin"
+            inferred = infer_github_repo_from_remote(repo_root, remote) or "<none>"
             git_msg = f"ok (branch: {cur}, remote: {inferred})"
         else:
             git_msg = "unable to determine current branch"
