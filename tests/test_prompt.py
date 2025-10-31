@@ -2,7 +2,7 @@
 from pathlib import Path
 import json
 import time
-from pwm.commands.prompt import (
+from pwm.prompt.command import (
     extract_issue_key_from_branch,
     format_prompt,
     PromptFormat,
@@ -82,8 +82,8 @@ def test_cache_operations(tmp_path, monkeypatch):
     """Test cache get and set operations."""
     # Use temporary cache file
     cache_file = tmp_path / "test_cache.json"
-    monkeypatch.setattr("pwm.commands.prompt.CACHE_FILE", cache_file)
-    monkeypatch.setattr("pwm.commands.prompt.CACHE_DIR", tmp_path)
+    monkeypatch.setattr("pwm.prompt.command.CACHE_FILE", cache_file)
+    monkeypatch.setattr("pwm.prompt.command.CACHE_DIR", tmp_path)
 
     # Initially no cache
     assert get_cached_status("ABC-123") is None
@@ -108,8 +108,8 @@ def test_cache_operations(tmp_path, monkeypatch):
 def test_cache_file_corruption(tmp_path, monkeypatch):
     """Test that corrupted cache files are handled gracefully."""
     cache_file = tmp_path / "test_cache.json"
-    monkeypatch.setattr("pwm.commands.prompt.CACHE_FILE", cache_file)
-    monkeypatch.setattr("pwm.commands.prompt.CACHE_DIR", tmp_path)
+    monkeypatch.setattr("pwm.prompt.command.CACHE_FILE", cache_file)
+    monkeypatch.setattr("pwm.prompt.command.CACHE_DIR", tmp_path)
 
     # Write corrupted JSON
     cache_file.write_text("{invalid json")
