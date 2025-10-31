@@ -125,3 +125,46 @@ def test_get_pr_for_branch_not_exists():
         pr = client.get_pr_for_branch("owner/repo", "feature-branch")
 
         assert pr is None
+
+
+def test_get_pr_for_branch_all_states():
+    """Test getting PR for a branch including closed PRs."""
+    client = GitHubClient(base_url="https://api.github.com", token="test-token")
+
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = [
+        {"number": 42, "title": "Test PR", "state": "closed", "head": {"ref": "feature-branch"}}
+    ]
+
+    with patch("httpx.Client") as mock_client:
+        mock_client.return_value.__enter__.return_value.get.return_value = mock_response
+
+        pr = client.get_pr_for_branch("owner/repo", "feature-branch", state="all")
+
+        assert pr is not None
+        assert pr["number"] == 42
+        assert pr["state"] == "closed"
+
+
+def test_get_pr_for_branch_defaults_to_open():
+    """Test that get_pr_for_branch defaults to open PRs only."""
+    client = GitHubClient(base_url="https://api.github.com", token="test-token")
+
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = [
+        {"number": 1, "title": "Open PR", "state": "open"}
+    ]
+
+    with patch("httpx.Client") as mock_client:
+        mock_instance = mock_client.return_value.__enter__.return_value
+        mock_instance.get.return_value = mock_response
+
+        # Call without state parameter (should default to "open")
+        pr = client.get_pr_for_branch("owner/repo", "feature-branch")
+
+        assert pr is not None
+        # Verify the API was called with state="open"
+        call_args = mock_instance.get.call_args
+        assert call_args[1]["params"]["state"] == "open"

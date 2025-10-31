@@ -41,6 +41,11 @@ value = "Platform Team"
 # GitHub repo (org/repo format)
 repo = "myorg/myrepo"
 
+[github.pr_defaults]
+# Default reviewers for pull requests (used with pwm work-end --request-review)
+reviewers = ["teammate1", "teammate2"]
+team_reviewers = ["platform-team"]
+
 [branch]
 # Branch naming pattern
 # Available placeholders: {issue_key}, {slug}

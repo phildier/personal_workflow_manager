@@ -75,8 +75,74 @@ class JiraClient:
 
     def add_comment(self, key: str, body: str) -> bool:
         url = f"{self.base_url}/rest/api/3/issue/{key}/comment"
+        # Jira API v3 requires Atlassian Document Format (ADF)
+        adf_body = {
+            "type": "doc",
+            "version": 1,
+            "content": [
+                {
+                    "type": "paragraph",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": body
+                        }
+                    ]
+                }
+            ]
+        }
         with self._client() as c:
-            r = c.post(url, json={"body": body})
+            r = c.post(url, json={"body": adf_body})
+            return r.status_code in (201, 200)
+
+    def add_comment_with_link(self, key: str, text: str, link_text: str, link_url: str) -> bool:
+        """
+        Add a comment with a clickable link.
+
+        Args:
+            key: Jira issue key
+            text: Main comment text
+            link_text: Text to display for the link
+            link_url: URL for the link
+
+        Returns True if successful, False otherwise.
+        """
+        url = f"{self.base_url}/rest/api/3/issue/{key}/comment"
+        # Build ADF with text and clickable link
+        adf_body = {
+            "type": "doc",
+            "version": 1,
+            "content": [
+                {
+                    "type": "paragraph",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": text
+                        }
+                    ]
+                },
+                {
+                    "type": "paragraph",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": link_text,
+                            "marks": [
+                                {
+                                    "type": "link",
+                                    "attrs": {
+                                        "href": link_url
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+        with self._client() as c:
+            r = c.post(url, json={"body": adf_body})
             return r.status_code in (201, 200)
 
     def get_issue_types(self, project_key: str) -> list[dict]:

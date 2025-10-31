@@ -146,7 +146,7 @@ The codebase follows a domain-based architecture where each directory represents
   Provides subprocess-based Git helpers for branch operations and remote detection.
 
 - **Jira (pwm/jira/)**
-  REST API client for issue management, transitions, and comments.
+  REST API client for issue management, transitions, and comments. Uses Atlassian Document Format (ADF) for rich text including clickable links.
 
 - **GitHub (pwm/github/)**
   REST API client for token validation and PR creation/management.
