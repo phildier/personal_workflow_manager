@@ -59,10 +59,10 @@ pwm init
 **Start work on a Jira issue**
 ```bash
 # Create a new issue interactively
-pwm work-start --new
+pwm work-start --new  # or: pwm ws --new
 
 # Work on existing issue
-pwm work-start ABC-123
+pwm work-start ABC-123  # or: pwm ws ABC-123
 pwm work-start ABC-123 --no-transition --no-comment
 ```
 
@@ -73,7 +73,7 @@ pwm pr
 
 **Post status update**
 ```bash
-pwm work-end
+pwm work-end  # or: pwm we
 pwm work-end -m "Ready for review" --request-review
 ```
 

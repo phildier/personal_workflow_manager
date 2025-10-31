@@ -68,7 +68,7 @@ Show resolved project context including repository root, GitHub repo, Jira proje
 ### pwm init
 Initialize a `.pwm.toml` for the current repository. Prompts for Jira project key, GitHub repo, and branch naming pattern. Defaults to the current GitHub remote if detected.
 
-### pwm work-start [ISSUE]
+### pwm work-start [ISSUE] (alias: ws)
 Start work on a Jira issue: create or switch branches and update Jira.
 
 **Create a new issue:**
@@ -103,7 +103,7 @@ If you're on a branch with a Jira issue key:
 pwm pr
 ```
 
-### pwm work-end
+### pwm work-end (alias: we)
 Post a status update to both the PR and Jira issue with a summary of recent changes.
 
 Analyzes commits and generates a concise 1-2 sentence summary, then posts it to:

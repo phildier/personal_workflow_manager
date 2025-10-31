@@ -22,6 +22,7 @@ def init():
     init_project()
 
 @app.command("work-start")
+@app.command("ws")
 def work_start_cmd(
     issue_key: str = typer.Argument(None, help="Jira issue key (e.g., ABC-123). Omit if using --new."),
     new: bool = typer.Option(False, "--new", help="Create a new Jira issue interactively"),
@@ -37,6 +38,7 @@ def work_start_cmd(
     ))
 
 @app.command("work-end")
+@app.command("we")
 def work_end_cmd(
     message: str = typer.Option(None, "--message", "-m", help="Custom status message"),
     no_comment: bool = typer.Option(False, "--no-comment", help="Skip all comments"),
