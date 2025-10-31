@@ -13,6 +13,7 @@ It automatically detects project context, helps create and manage branches tied 
 - Config initialization: `pwm init` scaffolds `.pwm.toml` with inferred defaults (for example, the GitHub repo).
 - Work start automation: `pwm work-start <ISSUE>` creates or switches to a branch, optionally transitions the Jira issue to In Progress, and adds a Jira comment. Use `--new` to create a new Jira issue first.
 - Pull request automation: `pwm pr` creates or opens pull requests with auto-generated title and description from commits and Jira context.
+- Status updates: `pwm work-end` posts concise summaries to PR and Jira with recent changes, optionally requesting reviewers.
 - Self-check diagnostics: `pwm self-check` validates Git repo status, Jira API credentials, and GitHub API connectivity with helpful hints for missing environment variables.
 
 ----------------------------------------
@@ -100,6 +101,35 @@ If you're on a branch with a Jira issue key:
 
 ```
 pwm pr
+```
+
+### pwm work-end
+Post a status update to both the PR and Jira issue with a summary of recent changes.
+
+Analyzes commits and generates a concise 1-2 sentence summary, then posts it to:
+- GitHub PR as a comment
+- Jira issue with PR link
+
+**Options:**
+- `--message "text"` or `-m "text"`: Use custom message instead of auto-generated summary
+- `--no-comment`: Skip all comments
+- `--no-pr-comment`: Skip PR comment only
+- `--no-jira-comment`: Skip Jira comment only
+- `--request-review`: Request reviewers from config
+
+**Examples:**
+```
+pwm work-end                                    # Auto-generate summary
+pwm work-end -m "Ready for review"             # Custom message
+pwm work-end --request-review                   # Request reviewers
+pwm work-end --no-jira-comment                  # Only comment on PR
+```
+
+**Configure reviewers in `.pwm.toml`:**
+```toml
+[github.pr_defaults]
+reviewers = ["teammate1", "teammate2"]
+team_reviewers = ["platform-team"]
 ```
 
 ### pwm self-check

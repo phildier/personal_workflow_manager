@@ -8,6 +8,7 @@ It provides commands for:
 - Project setup (`pwm init`)
 - Context-aware branch creation and Jira issue tracking (`pwm work-start`)
 - Pull request creation and management (`pwm pr`)
+- Work status updates (`pwm work-end`)
 - System self-checks for environment validation (`pwm self-check`)
 
 The goal of pwm is to automate common engineering tasks while maintaining a modular, extensible design.
@@ -70,6 +71,12 @@ pwm work-start ABC-123 --no-transition --no-comment
 pwm pr
 ```
 
+**Post status update**
+```bash
+pwm work-end
+pwm work-end -m "Ready for review" --request-review
+```
+
 **Run diagnostics**
 ```bash
 pwm self-check
@@ -120,6 +127,7 @@ The codebase follows a domain-based architecture where each directory represents
 
 - **Work Domain (pwm/work/)**
   - `start.py`: Implements the `pwm work-start` command
+  - `end.py`: Implements the `pwm work-end` command for status updates
   - `create_issue.py`: Handles interactive Jira issue creation
 
 - **Check Domain (pwm/check/)**
