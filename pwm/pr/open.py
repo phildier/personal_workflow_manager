@@ -18,16 +18,26 @@ from pwm.prompt.command import extract_issue_key_from_branch
 from pwm.jira.client import JiraClient
 
 
-def generate_pr_title(issue_key: str, jira: Optional[JiraClient]) -> str:
+def generate_pr_title(issue_key: str, jira: Optional[JiraClient], commits: Optional[list[dict]] = None) -> str:
     """
-    Generate a succinct PR title from Jira issue.
+    Generate a succinct PR title from Jira issue or commit messages.
 
     Format: "[ISSUE-123] Brief summary"
+
+    Priority:
+    1. Jira issue summary (if Jira available)
+    2. First commit message (if commits available)
+    3. Generic "Changes" fallback
     """
     if jira:
         summary = jira.get_issue_summary(issue_key)
         if summary:
             return f"[{issue_key}] {summary}"
+
+    # Fallback to first commit message if available
+    if commits and len(commits) > 0:
+        first_commit = commits[0]["subject"]
+        return f"[{issue_key}] {first_commit}"
 
     return f"[{issue_key}] Changes"
 
@@ -175,7 +185,7 @@ def open_pr(open_browser: bool = True) -> int:
     jira_base_url = ctx.config.get("jira", {}).get("base_url")
 
     # Generate title and description
-    title = generate_pr_title(issue_key, jira)
+    title = generate_pr_title(issue_key, jira, commits)
     description = generate_pr_description(issue_key, commits, jira, jira_base_url)
 
     rprint(f"[cyan]Creating PR...[/cyan]")

@@ -15,11 +15,36 @@ def test_generate_pr_title_with_jira():
     jira.get_issue_summary.assert_called_once_with("ABC-123")
 
 
-def test_generate_pr_title_without_jira():
-    """Test PR title generation without Jira client."""
-    title = generate_pr_title("ABC-123", None)
+def test_generate_pr_title_without_jira_with_commits():
+    """Test PR title generation falls back to commit message when Jira unavailable."""
+    commits = [
+        {"hash": "abc123", "subject": "Add login endpoint", "body": ""},
+        {"hash": "def456", "subject": "Add tests", "body": ""}
+    ]
+
+    title = generate_pr_title("ABC-123", None, commits)
+
+    assert title == "[ABC-123] Add login endpoint"
+
+
+def test_generate_pr_title_without_jira_without_commits():
+    """Test PR title generation with no Jira and no commits."""
+    title = generate_pr_title("ABC-123", None, [])
 
     assert title == "[ABC-123] Changes"
+
+
+def test_generate_pr_title_jira_priority():
+    """Test that Jira summary takes priority over commit messages."""
+    jira = Mock()
+    jira.get_issue_summary.return_value = "Implement user authentication"
+    commits = [{"hash": "abc123", "subject": "Add login endpoint", "body": ""}]
+
+    title = generate_pr_title("ABC-123", jira, commits)
+
+    assert title == "[ABC-123] Implement user authentication"
+    # Should use Jira, not commits
+    jira.get_issue_summary.assert_called_once_with("ABC-123")
 
 
 def test_generate_pr_description_basic():
