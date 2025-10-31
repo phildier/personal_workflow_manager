@@ -5,6 +5,7 @@ from pwm.context.command import show_context
 from pwm.setup.init import init_project
 from pwm.prompt.command import prompt_command, PromptFormat
 from pwm.work.start import work_start
+from pwm.work.end import work_end
 from pwm.check.self_check import self_check
 from pwm.pr.open import open_pr
 
@@ -33,6 +34,23 @@ def work_start_cmd(
         create_new=new,
         transition=not no_transition,
         comment=not no_comment
+    ))
+
+@app.command("work-end")
+def work_end_cmd(
+    message: str = typer.Option(None, "--message", "-m", help="Custom status message"),
+    no_comment: bool = typer.Option(False, "--no-comment", help="Skip all comments"),
+    no_pr_comment: bool = typer.Option(False, "--no-pr-comment", help="Skip PR comment"),
+    no_jira_comment: bool = typer.Option(False, "--no-jira-comment", help="Skip Jira comment"),
+    request_review: bool = typer.Option(False, "--request-review", help="Request reviewers from config")
+) -> None:
+    """Post status update to PR and Jira issue."""
+    raise SystemExit(work_end(
+        message=message,
+        no_comment=no_comment,
+        no_pr_comment=no_pr_comment,
+        no_jira_comment=no_jira_comment,
+        request_review=request_review
     ))
 
 @app.command("self-check")

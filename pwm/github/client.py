@@ -118,3 +118,82 @@ class GitHubClient:
 
         prs = self.list_prs(repo, head=head, state="open")
         return prs[0] if prs else None
+
+    def get_pr_comments(self, repo: str, pr_number: int) -> list[dict]:
+        """
+        Get comments on a pull request.
+
+        Args:
+            repo: Repository in "owner/repo" format
+            pr_number: PR number
+
+        Returns list of comment objects with keys: id, body, created_at, user, etc.
+        """
+        url = f"{self.base_url}/repos/{repo}/issues/{pr_number}/comments"
+
+        try:
+            with httpx.Client(timeout=10.0) as c:
+                r = c.get(url, headers=self._headers())
+                if r.status_code == 200:
+                    return r.json()
+        except Exception:
+            pass
+        return []
+
+    def add_pr_comment(self, repo: str, pr_number: int, body: str) -> Optional[dict]:
+        """
+        Add a comment to a pull request.
+
+        Args:
+            repo: Repository in "owner/repo" format
+            pr_number: PR number
+            body: Comment text
+
+        Returns comment object or None on failure.
+        """
+        url = f"{self.base_url}/repos/{repo}/issues/{pr_number}/comments"
+
+        try:
+            with httpx.Client(timeout=10.0) as c:
+                r = c.post(url, headers=self._headers(), json={"body": body})
+                if r.status_code == 201:
+                    return r.json()
+        except Exception:
+            pass
+        return None
+
+    def request_reviewers(
+        self,
+        repo: str,
+        pr_number: int,
+        reviewers: Optional[list[str]] = None,
+        team_reviewers: Optional[list[str]] = None
+    ) -> bool:
+        """
+        Request reviewers for a pull request.
+
+        Args:
+            repo: Repository in "owner/repo" format
+            pr_number: PR number
+            reviewers: List of user logins
+            team_reviewers: List of team slugs
+
+        Returns True if successful, False otherwise.
+        """
+        url = f"{self.base_url}/repos/{repo}/pulls/{pr_number}/requested_reviewers"
+        payload = {}
+        if reviewers:
+            payload["reviewers"] = reviewers
+        if team_reviewers:
+            payload["team_reviewers"] = team_reviewers
+
+        if not payload:
+            return False
+
+        try:
+            with httpx.Client(timeout=10.0) as c:
+                r = c.post(url, headers=self._headers(), json=payload)
+                return r.status_code in (201, 200)
+        except Exception:
+            pass
+        return False

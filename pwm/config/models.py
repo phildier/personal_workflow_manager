@@ -15,11 +15,16 @@ class JiraConfig(BaseModel):
     project_key: Optional[str] = None
     issue_defaults: JiraIssueDefaults = Field(default_factory=JiraIssueDefaults)
 
+class GithubPRDefaults(BaseModel):
+    reviewers: list[str] = Field(default_factory=list)  # List of GitHub usernames
+    team_reviewers: list[str] = Field(default_factory=list)  # List of team slugs
+
 class GithubConfig(BaseModel):
     base_url: Optional[str] = None
     token: Optional[str] = None
     default_org: Optional[str] = None
     repo: Optional[str] = None
+    pr_defaults: GithubPRDefaults = Field(default_factory=GithubPRDefaults)
 
 class GitConfig(BaseModel):
     default_remote: str = "origin"
