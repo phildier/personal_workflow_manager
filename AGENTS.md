@@ -27,7 +27,7 @@ The goal of pwm is to automate common engineering tasks while maintaining a modu
 1. Clone the repository
    ```bash
    git clone <repo-url>
-   cd pwm
+   cd personal_workflow_manager
    ```
 2. Install dependencies
    ```bash
