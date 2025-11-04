@@ -58,6 +58,29 @@ def prompt_for_issue_details(
     )
     labels = [l.strip() for l in labels_input.split(",") if l.strip()] if labels_input else []
 
+    # Story points (optional, numeric)
+    # Check if we have a story points field in defaults
+    story_points_field_id = None
+    default_story_points = None
+    for field_id, value in (default_custom_fields or {}).items():
+        if field_id.startswith("customfield_") and isinstance(value, (int, float)):
+            # This might be story points - we'll verify against metadata later
+            story_points_field_id = field_id
+            default_story_points = value
+            break
+
+    story_points_str = str(default_story_points) if default_story_points else ""
+    story_points_input = Prompt.ask(
+        "[yellow]Story points[/yellow] (optional, press Enter to skip)",
+        default=story_points_str
+    )
+    story_points = None
+    if story_points_input.strip():
+        try:
+            story_points = float(story_points_input)
+        except ValueError:
+            rprint("[yellow]Invalid story points value, skipping.[/yellow]")
+
     # Get field metadata to discover required custom fields
     rprint("[dim]Checking for required fields...[/dim]")
     metadata = jira.get_create_metadata(project_key, issue_type)
@@ -65,10 +88,27 @@ def prompt_for_issue_details(
     custom_fields = {}
     default_custom_fields = default_custom_fields or {}
 
+    # Find story points field in metadata and add it if user provided a value
+    if story_points is not None and metadata:
+        for field_id, field_info in metadata.items():
+            field_name = field_info.get("name", "")
+            field_schema = field_info.get("schema", {})
+            field_type = field_schema.get("type", "")
+
+            # Look for story points field (common names and numeric type)
+            if field_type == "number" and field_name.lower() in ["story points", "storypoints", "story point estimate"]:
+                custom_fields[field_id] = story_points
+                story_points_field_id = field_id
+                break
+
     if metadata:
         for field_id, field_info in metadata.items():
             # Skip standard fields we already handle
             if field_id in ["summary", "description", "issuetype", "project", "labels"]:
+                continue
+
+            # Skip story points field if we already processed it
+            if field_id == story_points_field_id:
                 continue
 
             # Only prompt for required fields
@@ -88,6 +128,15 @@ def prompt_for_issue_details(
                 value = Prompt.ask(f"[yellow]{field_name}[/yellow] (required)", default=default_str)
                 if value.strip():
                     custom_fields[field_id] = value
+            elif field_type == "number":
+                # Numeric field (e.g., story points if it's required)
+                default_str = str(default_value) if isinstance(default_value, (int, float)) else ""
+                value_str = Prompt.ask(f"[yellow]{field_name}[/yellow] (required, numeric)", default=default_str)
+                if value_str.strip():
+                    try:
+                        custom_fields[field_id] = float(value_str)
+                    except ValueError:
+                        rprint(f"[red]Invalid numeric value for {field_name}[/red]")
             elif field_type == "option":
                 # Single-select field
                 allowed_values = field_info.get("allowedValues", [])

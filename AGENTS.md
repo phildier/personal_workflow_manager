@@ -151,6 +151,12 @@ The codebase follows a domain-based architecture where each directory represents
 - **GitHub (pwm/github/)**
   REST API client for token validation, PR creation/management, and comment tracking. Supports smart commit tracking by identifying pwm-generated comments via HTML markers.
 
+- **AI (pwm/ai/)**
+  Optional OpenAI integration for AI-powered summaries and content generation. Fully optional with graceful fallback when not configured.
+  - `openai_client.py`: REST API client for OpenAI completions API
+  - `prompts.py`: Prompt templates for different summarization tasks (PR descriptions, work-end updates, commit messages)
+  - `summarizer.py`: High-level functions that combine prompts with commit/diff data
+
 ----------------------------------------
 
 ## Security Best Practices
@@ -158,7 +164,9 @@ The codebase follows a domain-based architecture where each directory represents
 - **Tokens and Credentials**
   - Jira: PWM_JIRA_TOKEN, PWM_JIRA_EMAIL, PWM_JIRA_BASE_URL
   - GitHub: GITHUB_TOKEN or PWM_GITHUB_TOKEN
+  - OpenAI: PWM_OPENAI_API_KEY or OPENAI_API_KEY
   - Never commit credentials or embed them in source code.
+  - Redact API keys and tokens in all logging and error output.
 
 - **Network Handling**
   - Validate HTTP responses and handle all exceptions.
@@ -195,7 +203,9 @@ The codebase follows a domain-based architecture where each directory represents
 - Jira integration is optional - all commands work without Jira configured
 - When Jira is not configured, related operations are skipped and reported as such
 - GitHub is required for PR operations, but branch operations work independently
-- Use `if jira:` pattern to conditionally execute Jira-dependent code
+- OpenAI integration is optional - when not configured, falls back to heuristic-based summaries
+- Use `if client:` pattern to conditionally execute optional integrations (Jira, OpenAI)
+- Commands should accept optional client parameters with `Optional[ClientType] = None` and provide `--no-ai` flags for opt-out
 
 ### Test Mocking Patterns
 - Mock git operations by patching functions in the module where they're used, not where defined
@@ -208,6 +218,15 @@ The codebase follows a domain-based architecture where each directory represents
 - Convert to Python datetime: `datetime.fromisoformat(timestamp.replace("Z", "+00:00"))`
 - Git uses Unix timestamps internally, converted with `datetime.fromtimestamp(int(timestamp))`
 - Always handle timezone-aware datetimes when comparing timestamps
+
+### AI Integration Patterns
+- OpenAI client follows same pattern as JiraClient/GitHubClient: dataclass with `from_config()` classmethod
+- Prompt templates centralized in `pwm/ai/prompts.py` for easy customization
+- High-level summarizer functions in `pwm/ai/summarizer.py` handle prompt formatting and API calls
+- Always return `Optional[str]` - None indicates AI not configured or call failed
+- Use httpx with timeouts (30s for AI calls, may be slower than other APIs)
+- Default to cost-effective model (gpt-4o-mini) with configurable override
+- Document that commit/diff content is sent to OpenAI for privacy-conscious users
 
 ## Other Notes
 

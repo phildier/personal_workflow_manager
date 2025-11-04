@@ -16,7 +16,7 @@
 
 ## Upcoming (Short-Term)
 
-- Enhanced PR creation: Add support for default labels from config.
+- OpenAI integration: Optional AI-powered summaries for PR descriptions and work-end updates using OpenAI API. Fully optional with graceful fallback to heuristic-based summaries. Uses gpt-4o-mini by default for cost efficiency (~$1-3/month for typical use).
 - Improved config validation and clearer CLI feedback when configs are incomplete.
 - Color-coded CLI output and improved error grouping in self-check.
 
@@ -24,9 +24,10 @@
 
 ## Medium-Term Goals
 
-- Caching layer for Jira and GitHub data.
+- AI commit message generation: Generate conventional commit messages from staged diffs using OpenAI.
+- AI-powered release notes: Automatically generate changelog from merged PRs with intelligent categorization.
+- Caching layer for Jira and GitHub data (including AI-generated summaries).
 - Configurable commit templates with Jira keys.
-- Changelog generation from merged PRs.
 - Textual-based dashboard for current branches and PRs.
 
 ----------------------------------------

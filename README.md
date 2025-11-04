@@ -14,6 +14,7 @@ It automatically detects project context, helps create and manage branches tied 
 - Work start automation: `pwm work-start <ISSUE>` creates or switches to a branch, optionally transitions the Jira issue to In Progress, and adds a Jira comment. Use `--new` to create a new Jira issue first.
 - Pull request automation: `pwm pr` creates or opens pull requests with auto-generated title and description from commits and Jira context.
 - Status updates: `pwm work-end` posts concise summaries to PR and Jira with recent changes, optionally requesting reviewers.
+- AI-powered summaries (optional): OpenAI integration for generating intelligent PR descriptions and work summaries. Fully optional with graceful fallback to heuristic-based summaries when not configured.
 - Self-check diagnostics: `pwm self-check` validates Git repo status, Jira API credentials, and GitHub API connectivity with helpful hints for missing environment variables.
 
 ----------------------------------------
@@ -41,6 +42,7 @@ Environment variable overrides (recommended for tokens):
 |----------|------------|
 | Jira | PWM_JIRA_TOKEN, PWM_JIRA_EMAIL, PWM_JIRA_BASE_URL |
 | GitHub | GITHUB_TOKEN or PWM_GITHUB_TOKEN |
+| OpenAI | PWM_OPENAI_API_KEY or OPENAI_API_KEY (optional) |
 
 **Git Configuration:**
 
@@ -93,6 +95,7 @@ Interactively creates a new Jira issue, then creates a branch and starts work. P
 - Description (optional)
 - Issue type (Story, Task, Bug, etc.)
 - Labels (comma-separated, optional)
+- Story points (optional, numeric)
 - Any required custom fields returned by your Jira instance
 
 Issue type, labels, and custom field values can optionally be saved as defaults for next time.
