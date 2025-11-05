@@ -22,6 +22,8 @@ def test_work_start_creates_branch(monkeypatch, tmp_path):
         def get_issue_summary(self, key): return "Implement feature X"
         def transition_by_name(self, key, name): return True
         def add_comment(self, key, body): return True
+        def get_current_account_id(self): return "test-account-id-123"
+        def assign_issue(self, key, account_id): return True
     monkeypatch.setattr(jira_client_module.JiraClient, "from_config", classmethod(lambda cls, cfg: FakeJira()))
 
     repo_root = tmp_path
@@ -60,6 +62,10 @@ def test_work_start_with_new_flag(monkeypatch, tmp_path):
             return True
         def get_issue_types(self, project_key):
             return [{"id": "1", "name": "Story", "description": ""}]
+        def get_current_account_id(self):
+            return "test-account-id-456"
+        def assign_issue(self, key, account_id):
+            return True
     monkeypatch.setattr(jira_client_module.JiraClient, "from_config", classmethod(lambda cls, cfg: FakeJira()))
 
     # Mock create_new_issue (patch where it's used, not where it's defined)

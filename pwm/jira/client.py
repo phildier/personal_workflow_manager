@@ -36,6 +36,22 @@ class JiraClient:
         else:
             return False, f"HTTP {r.status_code}"
 
+    def get_current_account_id(self) -> Optional[str]:
+        """
+        Get the accountId of the current authenticated user.
+
+        Returns the accountId (required for setting assignee in Jira Cloud) or None on failure.
+        """
+        url = f"{self.base_url}/rest/api/3/myself"
+        try:
+            with self._client() as c:
+                r = c.get(url)
+                if r.status_code == 200:
+                    return r.json().get("accountId")
+        except Exception:
+            pass
+        return None
+
     def get_issue(self, key: str) -> Optional[dict]:
         url = f"{self.base_url}/rest/api/3/issue/{key}"
         with self._client() as c:
@@ -71,6 +87,21 @@ class JiraClient:
         url = f"{self.base_url}/rest/api/3/issue/{key}/transitions"
         with self._client() as c:
             r = c.post(url, json={"transition": {"id": tid}})
+            return r.status_code in (204, 200)
+
+    def assign_issue(self, key: str, account_id: str) -> bool:
+        """
+        Assign an issue to a user.
+
+        Args:
+            key: Issue key (e.g., "ABC-123")
+            account_id: User's accountId (required for Jira Cloud)
+
+        Returns True if successful, False otherwise.
+        """
+        url = f"{self.base_url}/rest/api/3/issue/{key}/assignee"
+        with self._client() as c:
+            r = c.put(url, json={"accountId": account_id})
             return r.status_code in (204, 200)
 
     def add_comment(self, key: str, body: str) -> bool:
@@ -203,7 +234,8 @@ class JiraClient:
         issue_type: str = "Story",
         description: Optional[str] = None,
         labels: Optional[list[str]] = None,
-        custom_fields: Optional[dict] = None
+        custom_fields: Optional[dict] = None,
+        assign_to_self: bool = True
     ) -> Optional[str]:
         """
         Create a new Jira issue.
@@ -215,6 +247,7 @@ class JiraClient:
             description: Issue description
             labels: List of labels
             custom_fields: Dict of custom field IDs to values (e.g., {"customfield_10370": {"value": "Team A"}})
+            assign_to_self: Assign the issue to the current user (default: True)
 
         Returns the issue key (e.g., "ABC-123") if successful, None otherwise.
         """
@@ -225,6 +258,12 @@ class JiraClient:
             "summary": summary,
             "issuetype": {"name": issue_type}
         }
+
+        # Assign to current user if requested
+        if assign_to_self:
+            account_id = self.get_current_account_id()
+            if account_id:
+                fields["assignee"] = {"accountId": account_id}
 
         if description:
             # Jira API v3 uses Atlassian Document Format (ADF)

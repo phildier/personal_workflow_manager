@@ -69,7 +69,12 @@ def work_start(
 
     transitioned = False
     commented = False
+    assigned = False
     if jira:
+        # Assign issue to current user
+        account_id = jira.get_current_account_id()
+        if account_id:
+            assigned = jira.assign_issue(issue_key, account_id)
         if transition:
             transitioned = jira.transition_by_name(issue_key, "In Progress") or False
         if comment:
@@ -82,6 +87,7 @@ def work_start(
     table.add_row("Branch created", "yes" if created else "no")
     table.add_row("Switched to branch", "yes" if (switched or current == branch_name) else "no")
     table.add_row("Jira summary", summary or "<unknown>")
+    table.add_row("Jira assigned to me", ("yes" if assigned else "no") if jira else "<skipped>")
     table.add_row("Jira transitioned -> In Progress", ("yes" if transitioned else "no") if jira else "<skipped>")
     table.add_row("Jira comment added", ("yes" if commented else "no") if jira else "<skipped>")
     rprint(table)
