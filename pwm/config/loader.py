@@ -47,6 +47,8 @@ def load_merged_config(repo_root: Path):
         env_overrides.setdefault("jira", {})["email"] = email
     if gh_token := os.getenv("GITHUB_TOKEN") or os.getenv("PWM_GITHUB_TOKEN"):
         env_overrides.setdefault("github", {})["token"] = gh_token
+    if openai_key := os.getenv("PWM_OPENAI_API_KEY") or os.getenv("OPENAI_API_KEY"):
+        env_overrides.setdefault("openai", {})["api_key"] = openai_key
 
     merged = _deep_merge(merged, env_overrides)
     meta = ContextMeta(
