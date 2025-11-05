@@ -8,6 +8,7 @@ from pwm.context.resolver import find_git_root, resolve_context
 from pwm.vcs.git_cli import current_branch, infer_github_repo_from_remote
 from pwm.jira.client import JiraClient
 from pwm.github.client import GitHubClient
+from pwm.ai.openai_client import OpenAIClient
 
 def self_check() -> int:
     git_ok = False
@@ -67,6 +68,21 @@ def self_check() -> int:
     else:
         gh_status = "context resolution failed"
 
+    openai_ok = False
+    openai_status = "not configured (optional)"
+    openai_hint = ""
+    if ctx:
+        openai = OpenAIClient.from_config(ctx.config)
+        if openai:
+            ok, msg = openai.ping()
+            openai_ok, openai_status = ok, msg
+            if not ok:
+                openai_hint = "set PWM_OPENAI_API_KEY or OPENAI_API_KEY"
+        else:
+            openai_status = "not configured (optional)"
+    else:
+        openai_status = "context resolution failed"
+
     table = Table(title="pwm self-check")
     table.add_column("Check", style="bold cyan")
     table.add_column("Status", style="white")
@@ -75,6 +91,7 @@ def self_check() -> int:
     table.add_row("Local git", "ok" if git_ok else f"[red]{git_msg}[/red]", "")
     table.add_row("Jira API", "ok" if jira_ok else f"[red]{jira_status}[/red]", jira_hint)
     table.add_row("GitHub API", "ok" if gh_ok else f"[red]{gh_status}[/red]", gh_hint)
+    table.add_row("OpenAI API", "ok" if openai_ok else f"[dim]{openai_status}[/dim]", openai_hint)
 
     rprint(table)
 

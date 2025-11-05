@@ -7,16 +7,16 @@
 
 - pwm init: Interactive project configuration generator with GitHub remote inference.
 - pwm work-start: Create or switch Git branches using a configurable pattern, transition Jira issues, and add comments. Supports creating new Jira issues interactively with --new flag.
-- pwm pr: Open or create pull requests with auto-generated title and description from commits and Jira. Opens existing PRs in browser if already created.
+- pwm pr: Open or create pull requests with auto-generated title and description from commits and Jira. Supports optional AI-generated summaries via OpenAI. Opens existing PRs in browser if already created.
 - pwm work-end: Post status updates to PR and Jira with auto-generated summaries, optionally request reviewers from config. Features smart commit tracking to show only new commits since last update.
-- pwm self-check: Validates Git, Jira, and GitHub connectivity with helpful hints.
+- pwm self-check: Validates Git, Jira, GitHub, and OpenAI connectivity with helpful hints.
 - pwm prompt: Shell prompt integration showing current Jira issue with optional status, colors, and emoji.
 
 ----------------------------------------
 
 ## Upcoming (Short-Term)
 
-- OpenAI integration: Optional AI-powered summaries for PR descriptions and work-end updates using OpenAI API. Fully optional with graceful fallback to heuristic-based summaries. Uses gpt-4o-mini by default for cost efficiency (~$1-3/month for typical use).
+- AI-powered work-end summaries: Extend OpenAI integration to generate intelligent status updates for work-end command.
 - Improved config validation and clearer CLI feedback when configs are incomplete.
 - Color-coded CLI output and improved error grouping in self-check.
 

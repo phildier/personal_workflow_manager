@@ -14,7 +14,7 @@ It automatically detects project context, helps create and manage branches tied 
 - Work start automation: `pwm work-start <ISSUE>` creates or switches to a branch, optionally transitions the Jira issue to In Progress, and adds a Jira comment. Use `--new` to create a new Jira issue first.
 - Pull request automation: `pwm pr` creates or opens pull requests with auto-generated title and description from commits and Jira context.
 - Status updates: `pwm work-end` posts concise summaries to PR and Jira with recent changes, optionally requesting reviewers.
-- AI-powered summaries (optional): OpenAI integration for generating intelligent PR descriptions and work summaries. Fully optional with graceful fallback to heuristic-based summaries when not configured.
+- AI-powered PR descriptions (optional): OpenAI integration generates intelligent summaries for pull request descriptions. Use `--no-ai` to skip. Fully optional with graceful fallback when not configured.
 - Self-check diagnostics: `pwm self-check` validates Git repo status, Jira API credentials, and GitHub API connectivity with helpful hints for missing environment variables.
 
 ----------------------------------------
@@ -120,8 +120,17 @@ If you're on a branch with a Jira issue key:
 - If a PR already exists, opens it in your browser
 - If no PR exists, creates one with:
   - Auto-generated title (from Jira issue if available, otherwise from first commit)
+  - AI-generated summary (when OpenAI configured)
   - Description including Jira link, issue description, and commit summary
   - Automatic push to remote if needed
+
+**Options:**
+- `--no-ai`: Skip AI-generated summary even when OpenAI is configured
+
+**AI integration:**
+- When OpenAI is configured, automatically generates intelligent PR summaries
+- Falls back to commit list if OpenAI not configured or API call fails
+- Use `--no-ai` flag to skip AI generation
 
 **Jira integration:**
 - Jira links and issue descriptions appear in PR description only when Jira is configured and API calls succeed
@@ -129,6 +138,7 @@ If you're on a branch with a Jira issue key:
 
 ```
 pwm pr
+pwm pr --no-ai
 ```
 
 ### pwm work-end (alias: we)

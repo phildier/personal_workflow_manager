@@ -70,9 +70,11 @@ def prompt(
     raise SystemExit(prompt_command(with_status=with_status, format_type=format, use_color=color))
 
 @app.command()
-def pr() -> None:
+def pr(
+    no_ai: bool = typer.Option(False, "--no-ai", help="Skip AI-generated summary")
+) -> None:
     """Open or create a pull request for the current branch."""
-    raise SystemExit(open_pr())
+    raise SystemExit(open_pr(use_ai=not no_ai))
 
 if __name__ == "__main__":
     app()

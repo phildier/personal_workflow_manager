@@ -86,13 +86,17 @@ def generate_pr_description(
     issue_key: str,
     commits: list[dict],
     jira: Optional[JiraClient],
-    jira_base_url: Optional[str]
+    jira_base_url: Optional[str],
+    openai: Optional['OpenAIClient'] = None,
+    use_ai: bool = True
 ) -> str:
     """
     Generate PR description from commits and Jira issue.
 
     Includes:
     - Link to Jira issue
+    - AI-generated summary (if OpenAI configured and use_ai=True)
+    - Jira issue description (if available)
     - Summary of commits
     """
     lines = []
@@ -101,6 +105,17 @@ def generate_pr_description(
     if jira_base_url:
         lines.append(f"**Jira:** [{issue_key}]({jira_base_url}/browse/{issue_key})")
         lines.append("")
+
+    # AI-generated summary (try first if enabled)
+    ai_summary = None
+    if use_ai and openai and commits:
+        from pwm.ai.summarizer import summarize_commits_for_pr
+        ai_summary = summarize_commits_for_pr(commits, openai)
+        if ai_summary:
+            lines.append("## Summary")
+            lines.append("")
+            lines.append(ai_summary)
+            lines.append("")
 
     # Get issue description from Jira if available
     if jira:
@@ -138,7 +153,7 @@ def generate_pr_description(
     return "\n".join(lines)
 
 
-def open_pr(open_browser: bool = True) -> int:
+def open_pr(open_browser: bool = True, use_ai: bool = True) -> int:
     """
     Open a pull request for the current branch.
 
@@ -229,9 +244,16 @@ def open_pr(open_browser: bool = True) -> int:
     jira = JiraClient.from_config(ctx.config)
     jira_base_url = ctx.config.get("jira", {}).get("base_url")
 
+    # Get OpenAI client for AI-powered description (optional)
+    from pwm.ai.openai_client import OpenAIClient
+    openai = OpenAIClient.from_config(ctx.config)
+
     # Generate title and description
     title = generate_pr_title(issue_key, jira, commits)
-    description = generate_pr_description(issue_key, commits, jira, jira_base_url)
+    description = generate_pr_description(issue_key, commits, jira, jira_base_url, openai, use_ai)
+
+    if openai and use_ai:
+        rprint("[dim]Generated AI summary...[/dim]")
 
     rprint(f"[cyan]Creating PR...[/cyan]")
     rprint(f"  Title: {title}")

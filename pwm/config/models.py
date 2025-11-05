@@ -32,6 +32,13 @@ class GitConfig(BaseModel):
 class BranchConfig(BaseModel):
     pattern: str = "{issue_key}-{slug}"
 
+class OpenAIConfig(BaseModel):
+    api_key: Optional[str] = None
+    base_url: str = "https://api.openai.com/v1"
+    model: str = "gpt-4o-mini"
+    max_tokens: int = 500
+    temperature: float = 0.7
+
 class UIConfig(BaseModel):
     editor: Optional[str] = None
 
@@ -40,6 +47,7 @@ class PWMConfig(BaseModel):
     github: GithubConfig = Field(default_factory=GithubConfig)
     git: GitConfig = Field(default_factory=GitConfig)
     branch: BranchConfig = Field(default_factory=BranchConfig)
+    openai: OpenAIConfig = Field(default_factory=OpenAIConfig)
     ui: UIConfig = Field(default_factory=UIConfig)
 
     def as_dict(self) -> Dict[str, Any]:
