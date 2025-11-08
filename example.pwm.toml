@@ -75,6 +75,10 @@ temperature = 0.7     # Creativity (0.0-2.0, higher = more creative)
 [daily_summary]
 # Daily work summary feature configuration
 
+# Scope configuration - search across org/multiple projects instead of just current repo/project
+# github_org = "AgencyPMG"              # If set, search all repos in this org (instead of current repo)
+# jira_projects = ["ALLI", "ASD"]       # If set, search these projects (instead of current project)
+
 # Filter options - only show your own work
 include_own_commits_only = true
 include_own_prs_only = true

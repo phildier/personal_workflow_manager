@@ -290,32 +290,43 @@ class GitHubClient:
 
     def search_prs_by_date(
         self,
-        repo: str,
+        repo: Optional[str],
         since: datetime,
         author: Optional[str] = None,
-        state: str = "all"
+        state: str = "all",
+        org: Optional[str] = None
     ) -> list[dict]:
         """
         Search for PRs created since a given date.
 
         Args:
-            repo: Repository in "owner/repo" format
+            repo: Repository in "owner/repo" format (optional if org provided)
             since: Only return PRs created after this timestamp
             author: Filter by PR author (GitHub username)
             state: PR state - "open", "closed", or "all"
+            org: Organization to search across (searches all repos if provided instead of repo)
 
         Returns list of PR objects.
         """
         # Use GitHub Search API: GET /search/issues
         # Query: repo:owner/repo is:pr created:>=YYYY-MM-DDTHH:MM:SS
+        # Or:    org:owner is:pr created:>=YYYY-MM-DDTHH:MM:SS
         url = f"{self.base_url}/search/issues"
         since_str = since.strftime("%Y-%m-%dT%H:%M:%S")
 
         query_parts = [
-            f"repo:{repo}",
             "is:pr",
             f"created:>={since_str}"
         ]
+
+        # Either search by org or by specific repo
+        if org:
+            query_parts.insert(0, f"org:{org}")
+        elif repo:
+            query_parts.insert(0, f"repo:{repo}")
+        else:
+            # Must have either org or repo
+            return []
 
         if author:
             query_parts.append(f"author:{author}")
@@ -366,81 +377,119 @@ class GitHubClient:
 
     def get_closed_prs(
         self,
-        repo: str,
+        repo: Optional[str],
         since: datetime,
-        author: Optional[str] = None
+        author: Optional[str] = None,
+        org: Optional[str] = None
     ) -> list[dict]:
         """
         Get PRs closed/merged since a given date.
 
         Args:
-            repo: Repository in "owner/repo" format
+            repo: Repository in "owner/repo" format (optional if org provided)
             since: Only return PRs closed after this timestamp
             author: Filter by PR author (GitHub username)
+            org: Organization to search across (searches all repos if provided instead of repo)
 
         Returns list of closed/merged PR objects.
         """
-        # Use GitHub Search API with closed filter
-        # Query: repo:owner/repo is:pr is:closed closed:>=YYYY-MM-DDTHH:MM:SS
+        # Use GitHub Search API with merged filter for merged PRs
+        # Query: repo:owner/repo is:pr is:merged merged:>=YYYY-MM-DDTHH:MM:SS
+        # Or:    org:owner is:pr is:merged merged:>=YYYY-MM-DDTHH:MM:SS
+        # Then do a second search for closed-but-not-merged
         url = f"{self.base_url}/search/issues"
         since_str = since.strftime("%Y-%m-%dT%H:%M:%S")
 
-        query_parts = [
-            f"repo:{repo}",
+        # First search: merged PRs
+        query_parts_merged = [
+            "is:pr",
+            "is:merged",
+            f"merged:>={since_str}"
+        ]
+
+        # Second search: closed but not merged PRs
+        query_parts_closed = [
             "is:pr",
             "is:closed",
+            "is:unmerged",
             f"closed:>={since_str}"
         ]
 
-        if author:
-            query_parts.append(f"author:{author}")
+        # Add scope (org or repo) to both queries
+        scope_part = []
+        if org:
+            scope_part = [f"org:{org}"]
+        elif repo:
+            scope_part = [f"repo:{repo}"]
+        else:
+            # Must have either org or repo
+            return []
 
-        params = {
-            "q": " ".join(query_parts),
-            "sort": "updated",
-            "order": "desc",
-            "per_page": 100
-        }
+        # Add author filter if specified
+        author_part = [f"author:{author}"] if author else []
+
+        # Build complete queries
+        query_merged = " ".join(scope_part + query_parts_merged + author_part)
+        query_closed = " ".join(scope_part + query_parts_closed + author_part)
 
         results = []
-        try:
-            with httpx.Client(timeout=30.0) as c:
-                # Handle pagination
-                page = 1
-                while True:
-                    params["page"] = page
-                    r = c.get(url, headers=self._headers(), params=params)
 
-                    if r.status_code != 200:
-                        break
+        # Helper function to fetch PRs for a query
+        def fetch_prs_for_query(query: str) -> list[dict]:
+            params = {
+                "q": query,
+                "sort": "updated",
+                "order": "desc",
+                "per_page": 100
+            }
+            prs = []
+            try:
+                with httpx.Client(timeout=30.0) as c:
+                    page = 1
+                    while True:
+                        params["page"] = page
+                        r = c.get(url, headers=self._headers(), params=params)
 
-                    data = r.json()
-                    items = data.get("items", [])
+                        if r.status_code != 200:
+                            break
 
-                    if not items:
-                        break
+                        data = r.json()
+                        items = data.get("items", [])
 
-                    # For each PR, fetch full details to get merged_at
-                    for item in items:
-                        pr_number = item.get("number")
-                        if pr_number:
-                            pr_details = self.get_pr_details(repo, pr_number)
-                            if pr_details:
-                                results.append(pr_details)
-                            else:
-                                # Fallback to search result if details fetch fails
-                                results.append(item)
+                        if not items:
+                            break
 
-                    # Check if there are more pages
-                    if len(items) < params["per_page"]:
-                        break
+                        # Extract repo from html_url for cross-repo searches
+                        for item in items:
+                            html_url = item.get("html_url", "")
+                            if html_url:
+                                # Parse repo from URL: https://github.com/org/repo/pull/123
+                                parts = html_url.split("/")
+                                if len(parts) >= 7:
+                                    item_repo = f"{parts[3]}/{parts[4]}"
+                                    pr_number = item.get("number")
+                                    if pr_number:
+                                        pr_details = self.get_pr_details(item_repo, pr_number)
+                                        if pr_details:
+                                            prs.append(pr_details)
+                                        else:
+                                            prs.append(item)
 
-                    page += 1
+                        # Check if there are more pages
+                        if len(items) < params["per_page"]:
+                            break
 
-                    # Safety limit: max 10 pages (1000 results)
-                    if page > 10:
-                        break
-        except Exception:
-            pass
+                        page += 1
+
+                        # Safety limit: max 10 pages (1000 results)
+                        if page > 10:
+                            break
+            except Exception:
+                pass
+            return prs
+
+        # Fetch both merged and closed PRs
+        results.extend(fetch_prs_for_query(query_merged))
+        results.extend(fetch_prs_for_query(query_closed))
 
         return results

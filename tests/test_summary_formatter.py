@@ -63,8 +63,8 @@ class TestFormatMarkdown:
         assert "Monday, Jan 13 2025" in result
 
     def test_formats_opened_prs(self, sample_data):
-        """Should format opened PRs with markdown links."""
-        result = format_markdown(sample_data)
+        """Should format opened PRs with markdown links when show_links=True."""
+        result = format_markdown(sample_data, show_links=True)
 
         assert "## Pull Requests" in result
         assert "### Opened (2)" in result
@@ -72,16 +72,16 @@ class TestFormatMarkdown:
         assert "[#2](https://github.com/org/repo/pull/2) Fix bug in auth" in result
 
     def test_formats_merged_prs(self, sample_data):
-        """Should format merged PRs."""
-        result = format_markdown(sample_data)
+        """Should format merged PRs with links when show_links=True."""
+        result = format_markdown(sample_data, show_links=True)
 
         assert "### Merged (2)" in result
         assert "[#4](https://github.com/org/repo/pull/4) Merged feature" in result
         assert "[#5](https://github.com/org/repo/pull/5) Another merge" in result
 
     def test_formats_closed_prs(self, sample_data):
-        """Should format closed PRs."""
-        result = format_markdown(sample_data)
+        """Should format closed PRs with links when show_links=True."""
+        result = format_markdown(sample_data, show_links=True)
 
         assert "### Closed (1)" in result
         assert "[#3](https://github.com/org/repo/pull/3) Old PR closed" in result

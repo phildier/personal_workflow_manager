@@ -92,15 +92,15 @@ class TestCollectWorkData:
 
         # Should pass user to PR search
         mock_github_client.search_prs_by_date.assert_called_once_with(
-            "org/repo",
-            since,
+            repo="org/repo",
+            since=since,
             author="testuser",
             state="all"
         )
 
         mock_github_client.get_closed_prs.assert_called_once_with(
-            "org/repo",
-            since,
+            repo="org/repo",
+            since=since,
             author="testuser"
         )
 
@@ -141,15 +141,15 @@ class TestCollectWorkData:
 
         # Should pass None for author
         mock_github_client.search_prs_by_date.assert_called_once_with(
-            "org/repo",
-            since,
+            repo="org/repo",
+            since=since,
             author=None,
             state="all"
         )
 
         mock_github_client.get_closed_prs.assert_called_once_with(
-            "org/repo",
-            since,
+            repo="org/repo",
+            since=since,
             author=None
         )
 

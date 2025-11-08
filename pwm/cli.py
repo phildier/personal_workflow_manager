@@ -8,6 +8,7 @@ from pwm.work.start import work_start
 from pwm.work.end import work_end
 from pwm.check.self_check import self_check
 from pwm.pr.open import open_pr
+from pwm.summary.command import daily_summary
 
 app = typer.Typer(help="Personal Workflow Manager")
 
@@ -75,6 +76,35 @@ def pr(
 ) -> None:
     """Open or create a pull request for the current branch."""
     raise SystemExit(open_pr(use_ai=not no_ai))
+
+@app.command("daily-summary")
+@app.command("ds")
+def daily_summary_cmd(
+    since: str = typer.Option(None, "--since", help="Start time (YYYY-MM-DD HH:MM)"),
+    no_ai: bool = typer.Option(False, "--no-ai", help="Skip AI-generated summary"),
+    format: str = typer.Option(None, "--format", help="Output format: text or markdown"),
+    output: str = typer.Option(None, "--output", "-o", help="Save to file"),
+    links: bool = typer.Option(False, "--links", help="Show URLs for PRs and Jira issues")
+) -> None:
+    """Generate summary of work from previous business day to now."""
+    # Parse since if provided
+    since_dt = None
+    if since:
+        try:
+            from datetime import datetime
+            since_dt = datetime.strptime(since, "%Y-%m-%d %H:%M")
+        except ValueError:
+            from rich import print as rprint
+            rprint("[red]Error:[/red] Invalid date format. Use: YYYY-MM-DD HH:MM")
+            raise typer.Exit(1)
+
+    raise SystemExit(daily_summary(
+        since=since_dt,
+        use_ai=not no_ai,
+        format=format,
+        output_file=output,
+        show_links=links
+    ))
 
 if __name__ == "__main__":
     app()

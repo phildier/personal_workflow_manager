@@ -45,6 +45,10 @@ class UIConfig(BaseModel):
 class DailySummaryConfig(BaseModel):
     """Configuration for daily summary feature."""
 
+    # Scope configuration
+    github_org: Optional[str] = None  # If set, search all repos in org instead of current repo
+    jira_projects: Optional[list[str]] = None  # If set, search these projects instead of current project
+
     # Filter options
     include_own_commits_only: bool = True
     include_own_prs_only: bool = True

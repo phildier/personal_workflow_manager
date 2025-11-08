@@ -109,18 +109,27 @@ def test_get_closed_prs(monkeypatch):
         def __enter__(self): return self
         def __exit__(self, *args): pass
         def get(self, url, headers=None, params=None):
-            # Handle search API call
+            # Handle search API call - now expects 2 searches: merged and unmerged
             if "/search/issues" in url and params:
                 call_count["search"] += 1
                 query = params.get("q", "")
-                assert "is:closed" in query
-                assert "closed:>=" in query
-                return FakeResp(200, {
-                    "items": [
-                        {"number": 1, "title": "Closed PR"},
-                        {"number": 2, "title": "Merged PR"}
-                    ]
-                })
+                # First search: merged PRs
+                if "is:merged" in query:
+                    assert "merged:>=" in query
+                    return FakeResp(200, {
+                        "items": [
+                            {"number": 2, "title": "Merged PR", "html_url": "https://github.com/org/repo/pull/2"}
+                        ]
+                    })
+                # Second search: closed but not merged PRs
+                elif "is:unmerged" in query:
+                    assert "is:closed" in query
+                    assert "closed:>=" in query
+                    return FakeResp(200, {
+                        "items": [
+                            {"number": 1, "title": "Closed PR", "html_url": "https://github.com/org/repo/pull/1"}
+                        ]
+                    })
             # Handle PR details calls
             elif "/repos/org/repo/pulls/" in url:
                 call_count["details"] += 1
@@ -135,5 +144,5 @@ def test_get_closed_prs(monkeypatch):
     results = gh.get_closed_prs("org/repo", since)
 
     assert len(results) == 2
-    assert call_count["search"] == 1
+    assert call_count["search"] == 2  # Now expects 2 searches (merged + unmerged)
     assert call_count["details"] == 2  # Should fetch details for each PR

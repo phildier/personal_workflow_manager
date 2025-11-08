@@ -6,13 +6,15 @@ from pwm.summary.collector import WorkSummaryData
 from pwm.summary.business_days import format_date_range
 
 
-def format_markdown(data: WorkSummaryData, ai_summary: Optional[str] = None) -> str:
+def format_markdown(data: WorkSummaryData, ai_summary: Optional[str] = None, show_links: bool = False, jira_base_url: Optional[str] = None) -> str:
     """
     Format work summary data as markdown.
 
     Args:
         data: WorkSummaryData containing collected work information
         ai_summary: Optional AI-generated summary text
+        show_links: Whether to show URLs for PRs and Jira issues
+        jira_base_url: Jira base URL for generating issue links (only needed if show_links is True)
 
     Returns:
         Formatted markdown string
@@ -42,7 +44,7 @@ def format_markdown(data: WorkSummaryData, ai_summary: Optional[str] = None) -> 
                 title = pr.get('title', 'Untitled')
                 number = pr.get('number')
                 html_url = pr.get('html_url', '')
-                if html_url:
+                if show_links and html_url:
                     lines.append(f"- [#{number}]({html_url}) {title}")
                 else:
                     lines.append(f"- #{number} {title}")
@@ -54,7 +56,7 @@ def format_markdown(data: WorkSummaryData, ai_summary: Optional[str] = None) -> 
                 title = pr.get('title', 'Untitled')
                 number = pr.get('number')
                 html_url = pr.get('html_url', '')
-                if html_url:
+                if show_links and html_url:
                     lines.append(f"- [#{number}]({html_url}) {title}")
                 else:
                     lines.append(f"- #{number} {title}")
@@ -66,7 +68,7 @@ def format_markdown(data: WorkSummaryData, ai_summary: Optional[str] = None) -> 
                 title = pr.get('title', 'Untitled')
                 number = pr.get('number')
                 html_url = pr.get('html_url', '')
-                if html_url:
+                if show_links and html_url:
                     lines.append(f"- [#{number}]({html_url}) {title}")
                 else:
                     lines.append(f"- #{number} {title}")
@@ -82,7 +84,11 @@ def format_markdown(data: WorkSummaryData, ai_summary: Optional[str] = None) -> 
             for issue in data.jira_created:
                 key = issue.get('key', 'Unknown')
                 summary = issue.get('summary', 'No summary')
-                lines.append(f"- {key}: {summary}")
+                if show_links and jira_base_url:
+                    issue_url = f"{jira_base_url}/browse/{key}"
+                    lines.append(f"- [{key}]({issue_url}): {summary}")
+                else:
+                    lines.append(f"- {key}: {summary}")
             lines.append("")
 
         if data.jira_updated:
@@ -92,7 +98,11 @@ def format_markdown(data: WorkSummaryData, ai_summary: Optional[str] = None) -> 
                 summary = issue.get('summary', 'No summary')
                 status = issue.get('status', {})
                 status_name = status.get('name', 'Unknown') if isinstance(status, dict) else 'Unknown'
-                lines.append(f"- {key}: {summary} → {status_name}")
+                if show_links and jira_base_url:
+                    issue_url = f"{jira_base_url}/browse/{key}"
+                    lines.append(f"- [{key}]({issue_url}): {summary} → {status_name}")
+                else:
+                    lines.append(f"- {key}: {summary} → {status_name}")
             lines.append("")
 
     # Handle empty case
@@ -104,13 +114,15 @@ def format_markdown(data: WorkSummaryData, ai_summary: Optional[str] = None) -> 
     return "\n".join(lines)
 
 
-def format_text(data: WorkSummaryData, ai_summary: Optional[str] = None) -> str:
+def format_text(data: WorkSummaryData, ai_summary: Optional[str] = None, show_links: bool = False, jira_base_url: Optional[str] = None) -> str:
     """
     Format work summary data as plain text.
 
     Args:
         data: WorkSummaryData containing collected work information
         ai_summary: Optional AI-generated summary text
+        show_links: Whether to show URLs for PRs and Jira issues
+        jira_base_url: Jira base URL for generating issue links (only needed if show_links is True)
 
     Returns:
         Formatted plain text string
@@ -142,7 +154,11 @@ def format_text(data: WorkSummaryData, ai_summary: Optional[str] = None) -> str:
             for pr in data.prs_opened:
                 title = pr.get('title', 'Untitled')
                 number = pr.get('number')
-                lines.append(f"  • #{number} {title}")
+                html_url = pr.get('html_url', '')
+                if show_links and html_url:
+                    lines.append(f"  • #{number} {title} ({html_url})")
+                else:
+                    lines.append(f"  • #{number} {title}")
             lines.append("")
 
         if data.prs_merged:
@@ -150,7 +166,11 @@ def format_text(data: WorkSummaryData, ai_summary: Optional[str] = None) -> str:
             for pr in data.prs_merged:
                 title = pr.get('title', 'Untitled')
                 number = pr.get('number')
-                lines.append(f"  • #{number} {title}")
+                html_url = pr.get('html_url', '')
+                if show_links and html_url:
+                    lines.append(f"  • #{number} {title} ({html_url})")
+                else:
+                    lines.append(f"  • #{number} {title}")
             lines.append("")
 
         if data.prs_closed:
@@ -158,7 +178,11 @@ def format_text(data: WorkSummaryData, ai_summary: Optional[str] = None) -> str:
             for pr in data.prs_closed:
                 title = pr.get('title', 'Untitled')
                 number = pr.get('number')
-                lines.append(f"  • #{number} {title}")
+                html_url = pr.get('html_url', '')
+                if show_links and html_url:
+                    lines.append(f"  • #{number} {title} ({html_url})")
+                else:
+                    lines.append(f"  • #{number} {title}")
             lines.append("")
 
     # Jira section
@@ -171,7 +195,11 @@ def format_text(data: WorkSummaryData, ai_summary: Optional[str] = None) -> str:
             for issue in data.jira_created:
                 key = issue.get('key', 'Unknown')
                 summary = issue.get('summary', 'No summary')
-                lines.append(f"  • {key}: {summary}")
+                if show_links and jira_base_url:
+                    issue_url = f"{jira_base_url}/browse/{key}"
+                    lines.append(f"  • {key}: {summary} ({issue_url})")
+                else:
+                    lines.append(f"  • {key}: {summary}")
             lines.append("")
 
         if data.jira_updated:
@@ -181,7 +209,11 @@ def format_text(data: WorkSummaryData, ai_summary: Optional[str] = None) -> str:
                 summary = issue.get('summary', 'No summary')
                 status = issue.get('status', {})
                 status_name = status.get('name', 'Unknown') if isinstance(status, dict) else 'Unknown'
-                lines.append(f"  • {key}: {summary} → {status_name}")
+                if show_links and jira_base_url:
+                    issue_url = f"{jira_base_url}/browse/{key}"
+                    lines.append(f"  • {key}: {summary} → {status_name} ({issue_url})")
+                else:
+                    lines.append(f"  • {key}: {summary} → {status_name}")
             lines.append("")
 
     # Handle empty case

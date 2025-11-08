@@ -322,7 +322,7 @@ class JiraClient:
 
         Returns list of issue objects with fields: key, summary, status, created, updated, assignee
         """
-        url = f"{self.base_url}/rest/api/3/search"
+        url = f"{self.base_url}/rest/api/3/search/jql"
         params = {
             "jql": jql,
             "maxResults": max_results,
@@ -355,7 +355,7 @@ class JiraClient:
 
     def get_issues_created_since(
         self,
-        project_key: str,
+        project_keys: str | list[str],
         since: "datetime",
         assignee: Optional[str] = "currentUser()"
     ) -> list[dict]:
@@ -363,7 +363,7 @@ class JiraClient:
         Get issues created since a given date.
 
         Args:
-            project_key: Jira project key (e.g., "ABC")
+            project_keys: Jira project key(s) (e.g., "ABC" or ["ABC", "XYZ"])
             since: Only return issues created after this timestamp
             assignee: Filter by assignee (default: "currentUser()") - use None for all users
 
@@ -371,7 +371,16 @@ class JiraClient:
         """
         from datetime import datetime
         since_str = since.strftime("%Y-%m-%d %H:%M")
-        jql = f'project = {project_key} AND created >= "{since_str}"'
+
+        # Handle multiple projects
+        if isinstance(project_keys, list):
+            if not project_keys:
+                return []
+            project_filter = f'project in ({", ".join(project_keys)})'
+        else:
+            project_filter = f'project = {project_keys}'
+
+        jql = f'{project_filter} AND created >= "{since_str}"'
         if assignee:
             jql += f" AND assignee = {assignee}"
 
@@ -379,7 +388,7 @@ class JiraClient:
 
     def get_issues_updated_since(
         self,
-        project_key: str,
+        project_keys: str | list[str],
         since: "datetime",
         assignee: Optional[str] = "currentUser()"
     ) -> list[dict]:
@@ -387,7 +396,7 @@ class JiraClient:
         Get issues updated since a given date (excluding newly created).
 
         Args:
-            project_key: Jira project key (e.g., "ABC")
+            project_keys: Jira project key(s) (e.g., "ABC" or ["ABC", "XYZ"])
             since: Only return issues updated after this timestamp
             assignee: Filter by assignee (default: "currentUser()") - use None for all users
 
@@ -395,7 +404,16 @@ class JiraClient:
         """
         from datetime import datetime
         since_str = since.strftime("%Y-%m-%d %H:%M")
-        jql = f'project = {project_key} AND updated >= "{since_str}" AND created < "{since_str}"'
+
+        # Handle multiple projects
+        if isinstance(project_keys, list):
+            if not project_keys:
+                return []
+            project_filter = f'project in ({", ".join(project_keys)})'
+        else:
+            project_filter = f'project = {project_keys}'
+
+        jql = f'{project_filter} AND updated >= "{since_str}" AND created < "{since_str}"'
         if assignee:
             jql += f" AND assignee = {assignee}"
 

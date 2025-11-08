@@ -50,32 +50,53 @@ def collect_work_data(
     summary_config = config.get("daily_summary", {})
     include_own_prs = summary_config.get("include_own_prs_only", True)
     include_own_issues = summary_config.get("include_own_issues_only", True)
+    github_org = summary_config.get("github_org")
+    jira_projects = summary_config.get("jira_projects")
 
     # Collect GitHub PRs
     prs_opened = []
     prs_closed = []
     prs_merged = []
 
-    if github_client and github_repo:
+    if github_client:
         # Get current user if filtering by author
         github_user = None
         if include_own_prs:
             github_user = github_client.get_current_user()
 
-        # Get opened PRs
-        prs_opened = github_client.search_prs_by_date(
-            github_repo,
-            since,
-            author=github_user,
-            state="all"
-        )
+        # Determine search scope: org-wide or specific repo
+        if github_org:
+            # Search across all repos in org
+            prs_opened = github_client.search_prs_by_date(
+                repo=None,
+                since=since,
+                author=github_user,
+                state="all",
+                org=github_org
+            )
 
-        # Get closed/merged PRs
-        all_closed = github_client.get_closed_prs(
-            github_repo,
-            since,
-            author=github_user
-        )
+            all_closed = github_client.get_closed_prs(
+                repo=None,
+                since=since,
+                author=github_user,
+                org=github_org
+            )
+        elif github_repo:
+            # Search specific repo
+            prs_opened = github_client.search_prs_by_date(
+                repo=github_repo,
+                since=since,
+                author=github_user,
+                state="all"
+            )
+
+            all_closed = github_client.get_closed_prs(
+                repo=github_repo,
+                since=since,
+                author=github_user
+            )
+        else:
+            all_closed = []
 
         # Separate closed vs merged
         for pr in all_closed:
@@ -88,21 +109,25 @@ def collect_work_data(
     jira_created = []
     jira_updated = []
 
-    if jira_client and jira_project:
+    if jira_client:
         # Use currentUser() JQL function if filtering by assignee
         assignee = "currentUser()" if include_own_issues else None
 
-        jira_created = jira_client.get_issues_created_since(
-            jira_project,
-            since,
-            assignee=assignee
-        )
+        # Determine search scope: multiple projects or single project
+        projects_to_search = jira_projects if jira_projects else (jira_project if jira_project else None)
 
-        jira_updated = jira_client.get_issues_updated_since(
-            jira_project,
-            since,
-            assignee=assignee
-        )
+        if projects_to_search:
+            jira_created = jira_client.get_issues_created_since(
+                projects_to_search,
+                since,
+                assignee=assignee
+            )
+
+            jira_updated = jira_client.get_issues_updated_since(
+                projects_to_search,
+                since,
+                assignee=assignee
+            )
 
     return WorkSummaryData(
         prs_opened=prs_opened,
