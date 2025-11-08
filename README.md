@@ -14,6 +14,7 @@ It automatically detects project context, helps create and manage branches tied 
 - Work start automation: `pwm work-start <ISSUE>` creates or switches to a branch, optionally transitions the Jira issue to In Progress, and adds a Jira comment. Use `--new` to create a new Jira issue first.
 - Pull request automation: `pwm pr` creates or opens pull requests with auto-generated title and description from commits and Jira context.
 - Status updates: `pwm work-end` posts concise summaries to PR and Jira with recent changes, optionally requesting reviewers.
+- Daily work summaries: `pwm daily-summary` generates comprehensive reports of PRs and Jira issues from the previous business day, with optional AI summaries and org-wide search.
 - AI-powered PR descriptions (optional): OpenAI integration generates intelligent summaries for pull request descriptions. Use `--no-ai` to skip. Fully optional with graceful fallback when not configured.
 - Self-check diagnostics: `pwm self-check` validates Git repo status, Jira API credentials, and GitHub API connectivity with helpful hints for missing environment variables.
 
@@ -178,6 +179,87 @@ team_reviewers = ["platform-team"]
 
 ### pwm self-check
 Validate connections to Git, Jira, and GitHub and show remediation hints.
+
+### pwm daily-summary (alias: ds)
+Generate a comprehensive summary of work from the previous business day to now.
+
+Automatically calculates the previous business day:
+- **Monday**: Shows Friday through Monday
+- **Tuesday-Friday**: Shows previous day through current time
+- **Saturday/Sunday**: Shows Friday through current time
+
+Tracks:
+- **GitHub PRs**: Opened, merged, and closed (without merging)
+- **Jira Issues**: Created and updated
+
+**Scope options:**
+- Search across all repos in a GitHub organization (not just current repo)
+- Search across multiple Jira projects (not just current project)
+
+**Options:**
+- `--since "2025-01-10 09:00"`: Custom start time (YYYY-MM-DD HH:MM)
+- `--no-ai`: Skip AI-generated executive summary
+- `--format [text|markdown]`: Output format (default: markdown)
+- `--output report.md` or `-o report.md`: Save to file
+- `--links`: Show clickable URLs for PRs and Jira issues
+
+**Examples:**
+```bash
+pwm daily-summary                              # Auto-detect previous business day
+pwm ds                                         # Short alias
+pwm ds --since "2025-01-10 09:00"              # Custom date range
+pwm ds --no-ai                                 # Skip AI summary
+pwm ds --links --output daily.md               # With links, save to file
+pwm ds --format text                           # Plain text format
+```
+
+**Configuration (optional):**
+```toml
+[daily_summary]
+# Search across organization/multiple projects
+github_org = "MyOrg"                    # Search all repos in org
+jira_projects = ["PROJ1", "PROJ2"]      # Search multiple projects
+
+# Filter options (default: only your work)
+include_own_prs_only = true
+include_own_issues_only = true
+
+# Display options
+default_format = "markdown"             # or "text"
+```
+
+**AI integration:**
+- When OpenAI is configured, generates a 2-3 sentence executive summary
+- Summarizes key themes and accomplishments from the work period
+- Use `--no-ai` to skip AI generation
+
+**Output example:**
+```markdown
+# Daily Work Summary
+**Period:** Friday, Jan 10 2025 00:00 - Monday, Jan 13 2025 12:00
+
+## Pull Requests
+
+### Opened (4)
+- #314 [PROJ-123] Add new authentication feature
+- #315 [PROJ-124] Fix bug in payment processing
+
+### Merged (6)
+- #310 [PROJ-120] Update dependencies
+- #311 [PROJ-121] Refactor database queries
+
+### Closed (0)
+
+## Jira Issues
+
+### Created (3)
+- PROJ-125: Implement user notifications
+- PROJ-126: Fix edge case in search
+
+### Updated (5)
+- PROJ-100: Add API documentation → Done
+- PROJ-101: Review security audit → In Progress
+```
 
 ### pwm prompt
 Generate shell prompt information showing current Jira issue from branch name. Use this in your PS1/PROMPT for at-a-glance work context.
