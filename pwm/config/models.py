@@ -42,6 +42,24 @@ class OpenAIConfig(BaseModel):
 class UIConfig(BaseModel):
     editor: Optional[str] = None
 
+class DailySummaryConfig(BaseModel):
+    """Configuration for daily summary feature."""
+
+    # Filter options
+    include_own_commits_only: bool = True
+    include_own_prs_only: bool = True
+    include_own_issues_only: bool = True
+
+    # Display options
+    default_format: str = "markdown"  # "text" or "markdown"
+    show_commit_details: bool = True
+    group_commits_by_branch: bool = True
+    max_commits_per_branch: int = 10
+
+    # Business day configuration
+    work_start_hour: int = 0
+    work_end_hour: int = 23
+
 class PWMConfig(BaseModel):
     jira: JiraConfig = Field(default_factory=JiraConfig)
     github: GithubConfig = Field(default_factory=GithubConfig)
@@ -49,6 +67,7 @@ class PWMConfig(BaseModel):
     branch: BranchConfig = Field(default_factory=BranchConfig)
     openai: OpenAIConfig = Field(default_factory=OpenAIConfig)
     ui: UIConfig = Field(default_factory=UIConfig)
+    daily_summary: DailySummaryConfig = Field(default_factory=DailySummaryConfig)
 
     def as_dict(self) -> Dict[str, Any]:
         return self.model_dump(exclude_none=True)

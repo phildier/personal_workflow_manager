@@ -71,3 +71,21 @@ model = "gpt-4o-mini"
 # Generation parameters
 max_tokens = 500      # Maximum tokens in response
 temperature = 0.7     # Creativity (0.0-2.0, higher = more creative)
+
+[daily_summary]
+# Daily work summary feature configuration
+
+# Filter options - only show your own work
+include_own_commits_only = true
+include_own_prs_only = true
+include_own_issues_only = true
+
+# Display options
+default_format = "markdown"        # Output format: "markdown" or "text"
+show_commit_details = true         # Show detailed commit information
+group_commits_by_branch = true     # Group commits by branch name
+max_commits_per_branch = 10        # Maximum commits to show per branch
+
+# Business day configuration
+work_start_hour = 0   # Start of work day (00:00)
+work_end_hour = 23    # End of work day (23:59)
