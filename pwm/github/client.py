@@ -39,6 +39,22 @@ class GitHubClient:
         else:
             return False, f"HTTP {r.status_code}"
 
+    def get_current_user(self) -> Optional[str]:
+        """
+        Get the current authenticated user's login (username).
+
+        Returns the GitHub username or None on failure.
+        """
+        url = f"{self.base_url}/user"
+        try:
+            with httpx.Client(timeout=10.0) as c:
+                r = c.get(url, headers=self._headers())
+                if r.status_code == 200:
+                    return r.json().get("login")
+        except Exception:
+            pass
+        return None
+
     def list_prs(self, repo: str, head: Optional[str] = None, state: str = "open") -> list[dict]:
         """
         List pull requests for a repository.
@@ -271,3 +287,160 @@ class GitHubClient:
                         continue
 
         return max(pwm_comments) if pwm_comments else None
+
+    def search_prs_by_date(
+        self,
+        repo: str,
+        since: datetime,
+        author: Optional[str] = None,
+        state: str = "all"
+    ) -> list[dict]:
+        """
+        Search for PRs created since a given date.
+
+        Args:
+            repo: Repository in "owner/repo" format
+            since: Only return PRs created after this timestamp
+            author: Filter by PR author (GitHub username)
+            state: PR state - "open", "closed", or "all"
+
+        Returns list of PR objects.
+        """
+        # Use GitHub Search API: GET /search/issues
+        # Query: repo:owner/repo is:pr created:>=YYYY-MM-DDTHH:MM:SS
+        url = f"{self.base_url}/search/issues"
+        since_str = since.strftime("%Y-%m-%dT%H:%M:%S")
+
+        query_parts = [
+            f"repo:{repo}",
+            "is:pr",
+            f"created:>={since_str}"
+        ]
+
+        if author:
+            query_parts.append(f"author:{author}")
+
+        if state != "all":
+            query_parts.append(f"is:{state}")
+
+        params = {
+            "q": " ".join(query_parts),
+            "sort": "created",
+            "order": "desc",
+            "per_page": 100
+        }
+
+        results = []
+        try:
+            with httpx.Client(timeout=30.0) as c:
+                # Handle pagination
+                page = 1
+                while True:
+                    params["page"] = page
+                    r = c.get(url, headers=self._headers(), params=params)
+
+                    if r.status_code != 200:
+                        break
+
+                    data = r.json()
+                    items = data.get("items", [])
+
+                    if not items:
+                        break
+
+                    results.extend(items)
+
+                    # Check if there are more pages
+                    if len(items) < params["per_page"]:
+                        break
+
+                    page += 1
+
+                    # Safety limit: max 10 pages (1000 results)
+                    if page > 10:
+                        break
+        except Exception:
+            pass
+
+        return results
+
+    def get_closed_prs(
+        self,
+        repo: str,
+        since: datetime,
+        author: Optional[str] = None
+    ) -> list[dict]:
+        """
+        Get PRs closed/merged since a given date.
+
+        Args:
+            repo: Repository in "owner/repo" format
+            since: Only return PRs closed after this timestamp
+            author: Filter by PR author (GitHub username)
+
+        Returns list of closed/merged PR objects.
+        """
+        # Use GitHub Search API with closed filter
+        # Query: repo:owner/repo is:pr is:closed closed:>=YYYY-MM-DDTHH:MM:SS
+        url = f"{self.base_url}/search/issues"
+        since_str = since.strftime("%Y-%m-%dT%H:%M:%S")
+
+        query_parts = [
+            f"repo:{repo}",
+            "is:pr",
+            "is:closed",
+            f"closed:>={since_str}"
+        ]
+
+        if author:
+            query_parts.append(f"author:{author}")
+
+        params = {
+            "q": " ".join(query_parts),
+            "sort": "updated",
+            "order": "desc",
+            "per_page": 100
+        }
+
+        results = []
+        try:
+            with httpx.Client(timeout=30.0) as c:
+                # Handle pagination
+                page = 1
+                while True:
+                    params["page"] = page
+                    r = c.get(url, headers=self._headers(), params=params)
+
+                    if r.status_code != 200:
+                        break
+
+                    data = r.json()
+                    items = data.get("items", [])
+
+                    if not items:
+                        break
+
+                    # For each PR, fetch full details to get merged_at
+                    for item in items:
+                        pr_number = item.get("number")
+                        if pr_number:
+                            pr_details = self.get_pr_details(repo, pr_number)
+                            if pr_details:
+                                results.append(pr_details)
+                            else:
+                                # Fallback to search result if details fetch fails
+                                results.append(item)
+
+                    # Check if there are more pages
+                    if len(items) < params["per_page"]:
+                        break
+
+                    page += 1
+
+                    # Safety limit: max 10 pages (1000 results)
+                    if page > 10:
+                        break
+        except Exception:
+            pass
+
+        return results

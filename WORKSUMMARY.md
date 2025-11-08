@@ -4,11 +4,12 @@
 New command: `pwm daily-summary` (alias: `pwm ds`)
 
 **Purpose:** Generate a comprehensive summary of work done from the previous business day until now, including:
-- Git commits across all branches
-- GitHub PRs opened and closed
+- GitHub PRs opened and closed (with their commits)
 - Jira tickets created and updated
 
 **Example Use Case:** Running `pwm daily-summary` on Monday at noon will show all work from Friday 00:00 through Monday 12:00.
+
+**Note:** We focus on high-level work items (PRs and Jira issues) rather than individual git commits, since PR commits are already shown within GitHub PRs.
 
 ## Command Interface
 

@@ -307,3 +307,96 @@ class JiraClient:
             import sys
             print(f"[DEBUG] Exception creating issue: {e}", file=sys.stderr)
             return None
+
+    def search_issues_by_date(
+        self,
+        jql: str,
+        max_results: int = 100
+    ) -> list[dict]:
+        """
+        Search Jira issues using JQL.
+
+        Args:
+            jql: JQL query string
+            max_results: Maximum number of results to return (default: 100)
+
+        Returns list of issue objects with fields: key, summary, status, created, updated, assignee
+        """
+        url = f"{self.base_url}/rest/api/3/search"
+        params = {
+            "jql": jql,
+            "maxResults": max_results,
+            "fields": "key,summary,status,created,updated,assignee"
+        }
+
+        try:
+            with self._client() as c:
+                r = c.get(url, params=params)
+                if r.status_code == 200:
+                    data = r.json()
+                    issues = data.get("issues", [])
+                    # Flatten the structure for easier use
+                    result = []
+                    for issue in issues:
+                        fields = issue.get("fields", {})
+                        result.append({
+                            "key": issue.get("key"),
+                            "summary": fields.get("summary"),
+                            "status": fields.get("status"),
+                            "created": fields.get("created"),
+                            "updated": fields.get("updated"),
+                            "assignee": fields.get("assignee")
+                        })
+                    return result
+        except Exception:
+            pass
+
+        return []
+
+    def get_issues_created_since(
+        self,
+        project_key: str,
+        since: "datetime",
+        assignee: Optional[str] = "currentUser()"
+    ) -> list[dict]:
+        """
+        Get issues created since a given date.
+
+        Args:
+            project_key: Jira project key (e.g., "ABC")
+            since: Only return issues created after this timestamp
+            assignee: Filter by assignee (default: "currentUser()") - use None for all users
+
+        Returns list of issue objects.
+        """
+        from datetime import datetime
+        since_str = since.strftime("%Y-%m-%d %H:%M")
+        jql = f'project = {project_key} AND created >= "{since_str}"'
+        if assignee:
+            jql += f" AND assignee = {assignee}"
+
+        return self.search_issues_by_date(jql)
+
+    def get_issues_updated_since(
+        self,
+        project_key: str,
+        since: "datetime",
+        assignee: Optional[str] = "currentUser()"
+    ) -> list[dict]:
+        """
+        Get issues updated since a given date (excluding newly created).
+
+        Args:
+            project_key: Jira project key (e.g., "ABC")
+            since: Only return issues updated after this timestamp
+            assignee: Filter by assignee (default: "currentUser()") - use None for all users
+
+        Returns list of issue objects.
+        """
+        from datetime import datetime
+        since_str = since.strftime("%Y-%m-%d %H:%M")
+        jql = f'project = {project_key} AND updated >= "{since_str}" AND created < "{since_str}"'
+        if assignee:
+            jql += f" AND assignee = {assignee}"
+
+        return self.search_issues_by_date(jql)
