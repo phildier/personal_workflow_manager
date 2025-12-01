@@ -60,19 +60,24 @@ The `default_remote` setting controls which Git remote pwm uses for:
 
 **Custom Field Defaults:**
 
-If your Jira project requires custom fields (like "Responsible Team"), you can configure defaults in your config file:
+If your Jira project requires custom fields (like "Responsible Team"), you can configure defaults in your config file. When you use `pwm work-start --new`, you'll be prompted to save these values as defaults for future issues.
 
 ```toml
 [jira.issue_defaults]
 issue_type = "Story"
 labels = ["backend", "api"]
 
-# Custom field for "Responsible Team" (single-select)
+# Custom fields are saved automatically when you choose to save defaults
+# Example: Custom field for "Responsible Team" (single-select)
 [jira.issue_defaults.custom_fields.customfield_10370]
 value = "Platform Team"
+
+# Example: String custom field
+[jira.issue_defaults.custom_fields.customfield_12345]
+"Some default value"
 ```
 
-See `example.pwm.toml` for more configuration examples.
+You can also manually add custom field defaults to your config file. See `example.pwm.toml` for more configuration examples.
 
 ----------------------------------------
 
@@ -97,9 +102,9 @@ Interactively creates a new Jira issue, then creates a branch and starts work. P
 - Issue type (Story, Task, Bug, etc.)
 - Labels (comma-separated, optional)
 - Story points (optional, numeric)
-- Any required custom fields returned by your Jira instance
+- Any required custom fields returned by your Jira instance (e.g., "Responsible Team")
 
-Issue type, labels, and custom field values can optionally be saved as defaults for next time.
+After creating the issue, you'll be asked if you want to save the issue type, labels, and custom fields as defaults for future issues. These defaults are saved to `.pwm.toml` and will be pre-filled the next time you create an issue.
 
 Note: `--new` requires Jira to be configured. See Configuration section above.
 

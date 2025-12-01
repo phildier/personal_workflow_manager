@@ -185,40 +185,44 @@ def prompt_for_issue_details(
         "custom_fields": custom_fields
     }
 
-def save_issue_defaults(repo_root: Path, issue_type: str, labels: list[str]) -> None:
+def save_issue_defaults(repo_root: Path, issue_type: str, labels: list[str], custom_fields: Optional[dict] = None) -> None:
     """
     Save issue defaults to project config.
 
     Updates the .pwm.toml file with the new defaults.
     """
+    import tomllib
+    import toml  # For writing TOML
+
     config_path = repo_root / ".pwm.toml"
 
-    # Read existing config
-    existing_lines = []
+    # Read existing config as dict
+    existing_config = {}
     if config_path.exists():
-        existing_lines = config_path.read_text().splitlines()
+        with config_path.open("rb") as f:
+            existing_config = tomllib.load(f)
 
-    # Remove old [jira.issue_defaults] section if it exists
-    new_lines = []
-    skip_section = False
-    for line in existing_lines:
-        if line.strip() == "[jira.issue_defaults]":
-            skip_section = True
-            continue
-        elif line.strip().startswith("[") and skip_section:
-            skip_section = False
-        if not skip_section:
-            new_lines.append(line)
+    # Update jira.issue_defaults section
+    if "jira" not in existing_config:
+        existing_config["jira"] = {}
 
-    # Add new defaults section
-    new_lines.append("")
-    new_lines.append("[jira.issue_defaults]")
-    new_lines.append(f'issue_type = "{issue_type}"')
+    existing_config["jira"]["issue_defaults"] = {
+        "issue_type": issue_type
+    }
+
     if labels:
-        labels_str = ", ".join(f'"{l}"' for l in labels)
-        new_lines.append(f"labels = [{labels_str}]")
+        existing_config["jira"]["issue_defaults"]["labels"] = labels
 
-    config_path.write_text("\n".join(new_lines) + "\n")
+    # Add custom fields if provided
+    if custom_fields:
+        existing_config["jira"]["issue_defaults"]["custom_fields"] = {}
+        for field_id, value in custom_fields.items():
+            existing_config["jira"]["issue_defaults"]["custom_fields"][field_id] = value
+
+    # Write back to file
+    with config_path.open("w") as f:
+        toml.dump(existing_config, f)
+
     rprint(f"[dim]Saved defaults to {config_path}[/dim]")
 
 def create_new_issue(
@@ -262,9 +266,30 @@ def create_new_issue(
     rprint(f"[dim]{jira.base_url}/browse/{issue_key}[/dim]")
 
     # Save defaults for next time
+    should_save = False
+    custom_fields_to_save = {}
+
+    # Check if issue type or labels changed
     if details["issue_type"] != default_issue_type or details["labels"] != default_labels:
-        save_defaults = Confirm.ask("Save issue type and labels as defaults?", default=True)
+        should_save = True
+
+    # Check if custom fields changed or are new
+    current_custom_fields = details.get("custom_fields", {})
+    if current_custom_fields:
+        # Check if any custom fields differ from defaults
+        for field_id, value in current_custom_fields.items():
+            if field_id not in default_custom_fields or default_custom_fields[field_id] != value:
+                should_save = True
+                custom_fields_to_save[field_id] = value
+        # Also include unchanged custom fields so we preserve them
+        for field_id, value in default_custom_fields.items():
+            if field_id not in custom_fields_to_save:
+                custom_fields_to_save[field_id] = value
+
+    if should_save:
+        prompt_text = "Save issue type, labels, and custom fields as defaults?" if custom_fields_to_save else "Save issue type and labels as defaults?"
+        save_defaults = Confirm.ask(prompt_text, default=True)
         if save_defaults:
-            save_issue_defaults(repo_root, details["issue_type"], details["labels"])
+            save_issue_defaults(repo_root, details["issue_type"], details["labels"], custom_fields_to_save if custom_fields_to_save else None)
 
     return issue_key

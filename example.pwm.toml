@@ -24,6 +24,8 @@ issue_type = "Story"
 labels = ["backend", "api"]
 
 # Custom field defaults - useful for required fields in your Jira project
+# These are automatically saved when you use `pwm work-start --new` and choose to save defaults
+# You can also manually configure them here
 # Find custom field IDs by looking at Jira API responses or checking field settings
 # Format: customfield_XXXXX = value (string, object, or array depending on field type)
 
@@ -32,9 +34,11 @@ labels = ["backend", "api"]
 value = "Platform Team"
 
 # Example: String custom field
+# [jira.issue_defaults.custom_fields]
 # customfield_12345 = "Default value"
 
 # Example: Multi-select custom field
+# [jira.issue_defaults.custom_fields]
 # customfield_67890 = [{ value = "Option1" }, { value = "Option2" }]
 
 [github]
