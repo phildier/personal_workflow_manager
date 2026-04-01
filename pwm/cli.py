@@ -1,4 +1,3 @@
-
 import typer
 
 from pwm.context.command import show_context
@@ -12,79 +11,126 @@ from pwm.summary.command import daily_summary
 
 app = typer.Typer(help="Personal Workflow Manager")
 
+
+@app.callback(invoke_without_command=True)
+def main(ctx: typer.Context) -> None:
+    """Show top-level help when no command is provided."""
+    if ctx.invoked_subcommand is None:
+        typer.echo(ctx.get_help())
+        raise typer.Exit(0)
+
+
 @app.command()
 def context():
     """Show resolved project context (repo root, GitHub repo, Jira project, config paths)."""
     show_context()
+
 
 @app.command()
 def init():
     """Scaffold a .pwm.toml in the current project."""
     init_project()
 
+
 @app.command("work-start")
 @app.command("ws")
 def work_start_cmd(
-    issue_key: str = typer.Argument(None, help="Jira issue key (e.g., ABC-123). Omit if using --new."),
-    new: bool = typer.Option(False, "--new", help="Create a new Jira issue interactively"),
+    ctx: typer.Context,
+    issue_key: str = typer.Argument(
+        None, help="Jira issue key (e.g., ABC-123). Omit if using --new."
+    ),
+    new: bool = typer.Option(
+        False, "--new", help="Create a new Jira issue interactively"
+    ),
     no_transition: bool = typer.Option(False, help="Do not transition Jira issue"),
-    no_comment: bool = typer.Option(False, help="Do not add Jira comment")
+    no_comment: bool = typer.Option(False, help="Do not add Jira comment"),
 ):
     """Start work on a Jira issue: create or switch branch and optionally update Jira."""
-    raise SystemExit(work_start(
-        issue_key=issue_key,
-        create_new=new,
-        transition=not no_transition,
-        comment=not no_comment
-    ))
+    if not issue_key and not new:
+        typer.echo(ctx.get_help())
+        raise typer.Exit(0)
+
+    raise SystemExit(
+        work_start(
+            issue_key=issue_key,
+            create_new=new,
+            transition=not no_transition,
+            comment=not no_comment,
+        )
+    )
+
 
 @app.command("work-end")
 @app.command("we")
 def work_end_cmd(
     message: str = typer.Option(None, "--message", "-m", help="Custom status message"),
     no_comment: bool = typer.Option(False, "--no-comment", help="Skip all comments"),
-    no_pr_comment: bool = typer.Option(False, "--no-pr-comment", help="Skip PR comment"),
-    no_jira_comment: bool = typer.Option(False, "--no-jira-comment", help="Skip Jira comment"),
-    request_review: bool = typer.Option(False, "--request-review", help="Request reviewers from config")
+    no_pr_comment: bool = typer.Option(
+        False, "--no-pr-comment", help="Skip PR comment"
+    ),
+    no_jira_comment: bool = typer.Option(
+        False, "--no-jira-comment", help="Skip Jira comment"
+    ),
+    request_review: bool = typer.Option(
+        False, "--request-review", help="Request reviewers from config"
+    ),
 ) -> None:
     """Post status update to PR and Jira issue."""
-    raise SystemExit(work_end(
-        message=message,
-        no_comment=no_comment,
-        no_pr_comment=no_pr_comment,
-        no_jira_comment=no_jira_comment,
-        request_review=request_review
-    ))
+    raise SystemExit(
+        work_end(
+            message=message,
+            no_comment=no_comment,
+            no_pr_comment=no_pr_comment,
+            no_jira_comment=no_jira_comment,
+            request_review=request_review,
+        )
+    )
+
 
 @app.command("self-check")
 def self_check_cmd() -> None:
     """Run connectivity and setup checks for git, Jira, and GitHub."""
     raise SystemExit(self_check())
 
+
 @app.command()
 def prompt(
-    with_status: bool = typer.Option(False, "--with-status", help="Fetch and display Jira issue status"),
-    format: PromptFormat = typer.Option(PromptFormat.DEFAULT, "--format", help="Output format: default, minimal, or emoji"),
-    color: bool = typer.Option(False, "--color", help="Use ANSI color codes")
+    with_status: bool = typer.Option(
+        False, "--with-status", help="Fetch and display Jira issue status"
+    ),
+    format: PromptFormat = typer.Option(
+        PromptFormat.DEFAULT,
+        "--format",
+        help="Output format: default, minimal, or emoji",
+    ),
+    color: bool = typer.Option(False, "--color", help="Use ANSI color codes"),
 ) -> None:
     """Generate shell prompt information for current work context."""
-    raise SystemExit(prompt_command(with_status=with_status, format_type=format, use_color=color))
+    raise SystemExit(
+        prompt_command(with_status=with_status, format_type=format, use_color=color)
+    )
+
 
 @app.command()
 def pr(
-    no_ai: bool = typer.Option(False, "--no-ai", help="Skip AI-generated summary")
+    no_ai: bool = typer.Option(False, "--no-ai", help="Skip AI-generated summary"),
 ) -> None:
     """Open or create a pull request for the current branch."""
     raise SystemExit(open_pr(use_ai=not no_ai))
+
 
 @app.command("daily-summary")
 @app.command("ds")
 def daily_summary_cmd(
     since: str = typer.Option(None, "--since", help="Start time (YYYY-MM-DD HH:MM)"),
     no_ai: bool = typer.Option(False, "--no-ai", help="Skip AI-generated summary"),
-    format: str = typer.Option(None, "--format", help="Output format: text or markdown"),
+    format: str = typer.Option(
+        None, "--format", help="Output format: text or markdown"
+    ),
     output: str = typer.Option(None, "--output", "-o", help="Save to file"),
-    links: bool = typer.Option(False, "--links", help="Show URLs for PRs and Jira issues")
+    links: bool = typer.Option(
+        False, "--links", help="Show URLs for PRs and Jira issues"
+    ),
 ) -> None:
     """Generate summary of work from previous business day to now."""
     # Parse since if provided
@@ -92,19 +138,24 @@ def daily_summary_cmd(
     if since:
         try:
             from datetime import datetime
+
             since_dt = datetime.strptime(since, "%Y-%m-%d %H:%M")
         except ValueError:
             from rich import print as rprint
+
             rprint("[red]Error:[/red] Invalid date format. Use: YYYY-MM-DD HH:MM")
             raise typer.Exit(1)
 
-    raise SystemExit(daily_summary(
-        since=since_dt,
-        use_ai=not no_ai,
-        format=format,
-        output_file=output,
-        show_links=links
-    ))
+    raise SystemExit(
+        daily_summary(
+            since=since_dt,
+            use_ai=not no_ai,
+            format=format,
+            output_file=output,
+            show_links=links,
+        )
+    )
+
 
 if __name__ == "__main__":
     app()

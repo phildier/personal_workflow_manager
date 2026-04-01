@@ -1,8 +1,7 @@
-
 from __future__ import annotations
 from pathlib import Path
 import webbrowser
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from rich import print as rprint
 from rich.prompt import Confirm
 
@@ -11,14 +10,20 @@ from pwm.vcs.git_cli import (
     current_branch,
     get_default_branch,
     get_commits_since_base,
-    push_branch
+    get_diff_since_base,
+    push_branch,
 )
 from pwm.github.client import GitHubClient
 from pwm.prompt.command import extract_issue_key_from_branch
 from pwm.jira.client import JiraClient
 
+if TYPE_CHECKING:
+    from pwm.ai.summarizer import SupportsCompletion
 
-def display_pr_info(github: GitHubClient, github_repo: str, pr_number: int, pr_title: str, pr_url: str) -> None:
+
+def display_pr_info(
+    github: GitHubClient, github_repo: str, pr_number: int, pr_title: str, pr_url: str
+) -> None:
     """
     Display PR information including file stats and reviews.
 
@@ -37,7 +42,9 @@ def display_pr_info(github: GitHubClient, github_repo: str, pr_number: int, pr_t
         files_changed = pr_details.get("changed_files", 0)
         additions = pr_details.get("additions", 0)
         deletions = pr_details.get("deletions", 0)
-        rprint(f"[green]PR:[/green] {pr_title} [{files_changed} files, +{additions}, -{deletions}]")
+        rprint(
+            f"[green]PR:[/green] {pr_title} [{files_changed} files, +{additions}, -{deletions}]"
+        )
     else:
         rprint(f"[green]PR:[/green] {pr_title}")
 
@@ -58,7 +65,9 @@ def display_pr_info(github: GitHubClient, github_repo: str, pr_number: int, pr_t
             rprint(f"- {user}  {state}")
 
 
-def generate_pr_title(issue_key: str, jira: Optional[JiraClient], commits: Optional[list[dict]] = None) -> str:
+def generate_pr_title(
+    issue_key: str, jira: Optional[JiraClient], commits: Optional[list[dict]] = None
+) -> str:
     """
     Generate a succinct PR title from Jira issue or commit messages.
 
@@ -87,15 +96,18 @@ def generate_pr_description(
     commits: list[dict],
     jira: Optional[JiraClient],
     jira_base_url: Optional[str],
-    openai: Optional['OpenAIClient'] = None,
-    use_ai: bool = True
+    openai: Optional["SupportsCompletion"] = None,
+    use_ai: bool = True,
+    diff: Optional[str] = None,
+    diff_summary: Optional[str] = None,
 ) -> str:
     """
-    Generate PR description from commits and Jira issue.
+    Generate PR description from commits, diff, and Jira issue.
 
     Includes:
     - Link to Jira issue
-    - AI-generated summary (if OpenAI configured and use_ai=True)
+    - AI-generated commit summary (if OpenAI configured and use_ai=True)
+    - AI-generated diff summary (if OpenAI configured, use_ai=True, and diff provided)
     - Jira issue description (if available)
     - Summary of commits
     """
@@ -110,12 +122,26 @@ def generate_pr_description(
     ai_summary = None
     if use_ai and openai and commits:
         from pwm.ai.summarizer import summarize_commits_for_pr
+
         ai_summary = summarize_commits_for_pr(commits, openai)
         if ai_summary:
             lines.append("## Summary")
             lines.append("")
             lines.append(ai_summary)
             lines.append("")
+
+    # AI-generated diff summary
+    resolved_diff_summary = diff_summary
+    if resolved_diff_summary is None and use_ai and openai and diff:
+        from pwm.ai.summarizer import summarize_diff_for_pr
+
+        resolved_diff_summary = summarize_diff_for_pr(diff, openai)
+
+    if resolved_diff_summary:
+        lines.append("## Code Changes")
+        lines.append("")
+        lines.append(resolved_diff_summary)
+        lines.append("")
 
     # Get issue description from Jira if available
     if jira:
@@ -197,7 +223,9 @@ def open_pr(open_browser: bool = True, use_ai: bool = True) -> int:
     github = GitHubClient.from_config(ctx.config)
     if not github:
         rprint("[red]Error: GitHub not configured.[/red]")
-        rprint("[cyan]Set GITHUB_TOKEN or PWM_GITHUB_TOKEN environment variable.[/cyan]")
+        rprint(
+            "[cyan]Set GITHUB_TOKEN or PWM_GITHUB_TOKEN environment variable.[/cyan]"
+        )
         return 1
 
     # Check if PR already exists
@@ -224,7 +252,9 @@ def open_pr(open_browser: bool = True, use_ai: bool = True) -> int:
     # Get base branch
     base_branch_ref = get_default_branch(repo_root, remote)
     # Extract just the branch name (remove "origin/" prefix)
-    base_branch = base_branch_ref.split("/")[-1] if "/" in base_branch_ref else base_branch_ref
+    base_branch = (
+        base_branch_ref.split("/")[-1] if "/" in base_branch_ref else base_branch_ref
+    )
 
     # Get commits
     commits = get_commits_since_base(repo_root, base_branch_ref, remote)
@@ -233,6 +263,11 @@ def open_pr(open_browser: bool = True, use_ai: bool = True) -> int:
         create_anyway = Confirm.ask("Create PR anyway?", default=False)
         if not create_anyway:
             return 1
+
+    # Get diff (for AI summarization)
+    diff = None
+    if use_ai:
+        diff = get_diff_since_base(repo_root, base_branch_ref, remote)
 
     # Ensure branch is pushed
     rprint(f"[cyan]Pushing branch '{branch}' to remote...[/cyan]")
@@ -246,14 +281,38 @@ def open_pr(open_browser: bool = True, use_ai: bool = True) -> int:
 
     # Get OpenAI client for AI-powered description (optional)
     from pwm.ai.openai_client import OpenAIClient
+
     openai = OpenAIClient.from_config(ctx.config)
+
+    # Generate AI diff summary once so we can reuse it for terminal output and PR body.
+    diff_summary = None
+    if openai and use_ai and diff:
+        from pwm.ai.summarizer import summarize_diff_for_pr
+
+        diff_summary = summarize_diff_for_pr(diff, openai)
 
     # Generate title and description
     title = generate_pr_title(issue_key, jira, commits)
-    description = generate_pr_description(issue_key, commits, jira, jira_base_url, openai, use_ai)
+    description = generate_pr_description(
+        issue_key,
+        commits,
+        jira,
+        jira_base_url,
+        openai,
+        use_ai,
+        diff,
+        diff_summary=diff_summary,
+    )
 
     if openai and use_ai:
         rprint("[dim]Generated AI summary...[/dim]")
+
+        # Display diff summary if generated
+        if diff_summary:
+            rprint()
+            rprint("[bold cyan]Code Changes:[/bold cyan]")
+            rprint(f"[dim]{diff_summary}[/dim]")
+            rprint()
 
     rprint(f"[cyan]Creating PR...[/cyan]")
     rprint(f"  Title: {title}")
@@ -262,11 +321,7 @@ def open_pr(open_browser: bool = True, use_ai: bool = True) -> int:
 
     # Create PR
     pr = github.create_pr(
-        repo=github_repo,
-        title=title,
-        head=branch,
-        base=base_branch,
-        body=description
+        repo=github_repo, title=title, head=branch, base=base_branch, body=description
     )
 
     if not pr:

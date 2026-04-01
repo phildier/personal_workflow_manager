@@ -1,25 +1,34 @@
-
 from pwm.jira.client import JiraClient
+
 
 class FakeResp:
     def __init__(self, status_code, json_data=None):
         self.status_code = status_code
         self._json = json_data or {}
+
     def json(self):
         return self._json
+
 
 class FakeClient:
     def __init__(self, routes):
         self.routes = routes
-    def __enter__(self): return self
-    def __exit__(self, *args): pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        pass
+
     def get(self, url):
         for suffix, resp in self.routes.items():
             if url.endswith(suffix):
                 return resp
         return FakeResp(404, {})
+
     def post(self, url, json=None):
         return self.get(url)
+
 
 def test_ping_ok(monkeypatch):
     jc = JiraClient(base_url="https://example.atlassian.net", email="u", token="t")
@@ -29,11 +38,17 @@ def test_ping_ok(monkeypatch):
     assert ok is True
     assert "ok" in msg
 
+
 def test_get_issue_summary(monkeypatch):
     jc = JiraClient(base_url="https://example.atlassian.net", email="u", token="t")
-    routes = {"/rest/api/3/issue/ABC-1": FakeResp(200, {"fields": {"summary": "Do the thing"}})}
+    routes = {
+        "/rest/api/3/issue/ABC-1": FakeResp(
+            200, {"fields": {"summary": "Do the thing"}}
+        )
+    }
     monkeypatch.setattr(JiraClient, "_client", lambda self: FakeClient(routes))
     assert jc.get_issue_summary("ABC-1") == "Do the thing"
+
 
 def test_add_comment_with_link(monkeypatch):
     """Test that add_comment_with_link creates proper ADF structure with clickable links."""
@@ -43,8 +58,11 @@ def test_add_comment_with_link(monkeypatch):
     captured_payload = None
 
     class CaptureClient:
-        def __enter__(self): return self
-        def __exit__(self, *args): pass
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
 
         def post(self, url, json=None):
             nonlocal captured_payload
@@ -57,7 +75,7 @@ def test_add_comment_with_link(monkeypatch):
         "ABC-1",
         "Status update: Ready for review",
         "View PR #42",
-        "https://github.com/org/repo/pull/42"
+        "https://github.com/org/repo/pull/42",
     )
 
     assert result is True
@@ -87,40 +105,48 @@ def test_add_comment_with_link(monkeypatch):
     assert marks[0]["type"] == "link"
     assert marks[0]["attrs"]["href"] == "https://github.com/org/repo/pull/42"
 
+
 def test_search_issues_by_date(monkeypatch):
     jc = JiraClient(base_url="https://example.atlassian.net", email="u", token="t")
 
     class FakeSearchClient:
-        def __enter__(self): return self
-        def __exit__(self, *args): pass
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
         def get(self, url, params=None):
             if "/rest/api/3/search" in url and params:
                 jql = params.get("jql", "")
                 assert "project = ABC" in jql
-                return FakeResp(200, {
-                    "issues": [
-                        {
-                            "key": "ABC-1",
-                            "fields": {
-                                "summary": "Issue 1",
-                                "status": {"name": "In Progress"},
-                                "created": "2025-01-10T09:00:00.000+0000",
-                                "updated": "2025-01-11T10:00:00.000+0000",
-                                "assignee": {"accountId": "123"}
-                            }
-                        },
-                        {
-                            "key": "ABC-2",
-                            "fields": {
-                                "summary": "Issue 2",
-                                "status": {"name": "Done"},
-                                "created": "2025-01-10T10:00:00.000+0000",
-                                "updated": "2025-01-11T11:00:00.000+0000",
-                                "assignee": None
-                            }
-                        }
-                    ]
-                })
+                return FakeResp(
+                    200,
+                    {
+                        "issues": [
+                            {
+                                "key": "ABC-1",
+                                "fields": {
+                                    "summary": "Issue 1",
+                                    "status": {"name": "In Progress"},
+                                    "created": "2025-01-10T09:00:00.000+0000",
+                                    "updated": "2025-01-11T10:00:00.000+0000",
+                                    "assignee": {"accountId": "123"},
+                                },
+                            },
+                            {
+                                "key": "ABC-2",
+                                "fields": {
+                                    "summary": "Issue 2",
+                                    "status": {"name": "Done"},
+                                    "created": "2025-01-10T10:00:00.000+0000",
+                                    "updated": "2025-01-11T11:00:00.000+0000",
+                                    "assignee": None,
+                                },
+                            },
+                        ]
+                    },
+                )
             return FakeResp(404, {})
 
     monkeypatch.setattr(JiraClient, "_client", lambda self: FakeSearchClient())
@@ -133,33 +159,42 @@ def test_search_issues_by_date(monkeypatch):
     assert results[1]["key"] == "ABC-2"
     assert results[1]["summary"] == "Issue 2"
 
+
 def test_get_issues_created_since(monkeypatch):
     from datetime import datetime
+
     jc = JiraClient(base_url="https://example.atlassian.net", email="u", token="t")
 
     class FakeSearchClient:
-        def __enter__(self): return self
-        def __exit__(self, *args): pass
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
         def get(self, url, params=None):
             if "/rest/api/3/search" in url and params:
                 jql = params.get("jql", "")
                 assert "project = ABC" in jql
                 assert "created >=" in jql
                 assert "assignee = currentUser()" in jql
-                return FakeResp(200, {
-                    "issues": [
-                        {
-                            "key": "ABC-1",
-                            "fields": {
-                                "summary": "New issue",
-                                "status": {"name": "To Do"},
-                                "created": "2025-01-11T09:00:00.000+0000",
-                                "updated": "2025-01-11T09:00:00.000+0000",
-                                "assignee": {"accountId": "123"}
+                return FakeResp(
+                    200,
+                    {
+                        "issues": [
+                            {
+                                "key": "ABC-1",
+                                "fields": {
+                                    "summary": "New issue",
+                                    "status": {"name": "To Do"},
+                                    "created": "2025-01-11T09:00:00.000+0000",
+                                    "updated": "2025-01-11T09:00:00.000+0000",
+                                    "assignee": {"accountId": "123"},
+                                },
                             }
-                        }
-                    ]
-                })
+                        ]
+                    },
+                )
             return FakeResp(404, {})
 
     monkeypatch.setattr(JiraClient, "_client", lambda self: FakeSearchClient())
@@ -170,13 +205,19 @@ def test_get_issues_created_since(monkeypatch):
     assert results[0]["key"] == "ABC-1"
     assert results[0]["summary"] == "New issue"
 
+
 def test_get_issues_updated_since(monkeypatch):
     from datetime import datetime
+
     jc = JiraClient(base_url="https://example.atlassian.net", email="u", token="t")
 
     class FakeSearchClient:
-        def __enter__(self): return self
-        def __exit__(self, *args): pass
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
         def get(self, url, params=None):
             if "/rest/api/3/search" in url and params:
                 jql = params.get("jql", "")
@@ -184,20 +225,23 @@ def test_get_issues_updated_since(monkeypatch):
                 assert "updated >=" in jql
                 assert "created <" in jql  # Should exclude newly created
                 assert "assignee = currentUser()" in jql
-                return FakeResp(200, {
-                    "issues": [
-                        {
-                            "key": "ABC-5",
-                            "fields": {
-                                "summary": "Updated issue",
-                                "status": {"name": "In Review"},
-                                "created": "2025-01-05T09:00:00.000+0000",
-                                "updated": "2025-01-11T14:00:00.000+0000",
-                                "assignee": {"accountId": "123"}
+                return FakeResp(
+                    200,
+                    {
+                        "issues": [
+                            {
+                                "key": "ABC-5",
+                                "fields": {
+                                    "summary": "Updated issue",
+                                    "status": {"name": "In Review"},
+                                    "created": "2025-01-05T09:00:00.000+0000",
+                                    "updated": "2025-01-11T14:00:00.000+0000",
+                                    "assignee": {"accountId": "123"},
+                                },
                             }
-                        }
-                    ]
-                })
+                        ]
+                    },
+                )
             return FakeResp(404, {})
 
     monkeypatch.setattr(JiraClient, "_client", lambda self: FakeSearchClient())
@@ -208,3 +252,67 @@ def test_get_issues_updated_since(monkeypatch):
     assert results[0]["key"] == "ABC-5"
     assert results[0]["summary"] == "Updated issue"
     assert results[0]["status"]["name"] == "In Review"
+
+
+def test_network_errors_gracefully_degrade(monkeypatch):
+    """Network errors should not crash Jira client helper methods."""
+    jc = JiraClient(base_url="https://example.atlassian.net", email="u", token="t")
+
+    class FailingClient:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def get(self, *args, **kwargs):
+            raise RuntimeError("boom")
+
+        def post(self, *args, **kwargs):
+            raise RuntimeError("boom")
+
+        def put(self, *args, **kwargs):
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(JiraClient, "_client", lambda self: FailingClient())
+
+    assert jc.get_issue("ABC-1") is None
+    assert jc.get_issue_types("ABC") == []
+    assert jc.get_create_metadata("ABC", "Story") == {}
+    assert jc.transition_by_name("ABC-1", "In Progress") is False
+    assert jc.assign_issue("ABC-1", "account-id") is False
+    assert jc.add_comment("ABC-1", "hello") is False
+    assert jc.add_comment_with_link("ABC-1", "hello", "PR", "https://example") is False
+
+
+def test_create_issue_debug_output_is_sanitized(monkeypatch, capsys):
+    """Debug logging should avoid printing raw API response body."""
+    jc = JiraClient(base_url="https://example.atlassian.net", email="u", token="t")
+
+    class ErrorResp:
+        status_code = 400
+
+        def json(self):
+            return {}
+
+    class ErrorClient:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def get(self, url):
+            if url.endswith("/rest/api/3/myself"):
+                return FakeResp(200, {"accountId": "abc"})
+            return FakeResp(404, {})
+
+        def post(self, url, json=None):
+            return ErrorResp()
+
+    monkeypatch.setattr(JiraClient, "_client", lambda self: ErrorClient())
+
+    assert jc.create_issue(project_key="ABC", summary="Test") is None
+    captured = capsys.readouterr()
+    assert "Jira API error 400" in captured.err
+    assert "{" not in captured.err

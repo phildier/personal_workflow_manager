@@ -68,14 +68,19 @@ issue_type = "Story"
 labels = ["backend", "api"]
 
 # Custom fields are saved automatically when you choose to save defaults
-# Example: Custom field for "Responsible Team" (single-select)
+# Example: Custom field for "Responsible Team" (single-select, object value)
 [jira.issue_defaults.custom_fields.customfield_10370]
 value = "Platform Team"
 
-# Example: String custom field
-[jira.issue_defaults.custom_fields.customfield_12345]
-"Some default value"
+# Example: String custom field (primitive value)
+[jira.issue_defaults.custom_fields]
+customfield_12345 = "Some default value"
 ```
+
+**Note on custom field syntax:**
+- **Object values** (like single-select fields): Use nested table syntax `[jira.issue_defaults.custom_fields.FIELD_ID]` with `value = "..."` inside
+- **Primitive values** (strings, numbers): Use inline syntax under `[jira.issue_defaults.custom_fields]` with `FIELD_ID = "value"`
+- **Array values** (multi-select): Use inline array syntax like `FIELD_ID = [{ value = "Option1" }, { value = "Option2" }]`
 
 You can also manually add custom field defaults to your config file. See `example.pwm.toml` for more configuration examples.
 
@@ -126,16 +131,21 @@ If you're on a branch with a Jira issue key:
 - If a PR already exists, opens it in your browser
 - If no PR exists, creates one with:
   - Auto-generated title (from Jira issue if available, otherwise from first commit)
-  - AI-generated summary (when OpenAI configured)
+  - AI-generated commit summary (when OpenAI configured)
+  - AI-generated code changes summary (when OpenAI configured)
   - Description including Jira link, issue description, and commit summary
   - Automatic push to remote if needed
 
 **Options:**
-- `--no-ai`: Skip AI-generated summary even when OpenAI is configured
+- `--no-ai`: Skip AI-generated summaries even when OpenAI is configured
 
 **AI integration:**
-- When OpenAI is configured, automatically generates intelligent PR summaries
-- Falls back to commit list if OpenAI not configured or API call fails
+- When OpenAI is configured, automatically generates two intelligent summaries:
+  - **Commit summary**: Narrative of what was done (from commit messages)
+  - **Code changes summary**: Analysis of actual code changes (from git diff)
+- Both summaries appear in terminal output and PR description
+- Large diffs are intelligently truncated (skips generated files, focuses on source code)
+- Falls back gracefully if OpenAI not configured or API call fails
 - Use `--no-ai` flag to skip AI generation
 
 **Jira integration:**

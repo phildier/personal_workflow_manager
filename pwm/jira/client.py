@@ -1,8 +1,9 @@
-
 from __future__ import annotations
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Optional
 import httpx
+
 
 @dataclass
 class JiraClient:
@@ -11,9 +12,13 @@ class JiraClient:
     token: str
 
     @classmethod
-    def from_config(cls, cfg: dict) -> Optional['JiraClient']:
+    def from_config(cls, cfg: dict) -> Optional["JiraClient"]:
         jira = cfg.get("jira", {})
-        base_url, email, token = jira.get("base_url"), jira.get("email"), jira.get("token")
+        base_url, email, token = (
+            jira.get("base_url"),
+            jira.get("email"),
+            jira.get("token"),
+        )
         if not (base_url and email and token):
             return None
         return cls(base_url=base_url.rstrip("/"), email=email, token=token)
@@ -29,7 +34,9 @@ class JiraClient:
         except Exception as e:
             return False, f"network error: {e}"
         if r.status_code == 200:
-            acc = r.json().get("displayName") or r.json().get("emailAddress", "<unknown>")
+            acc = r.json().get("displayName") or r.json().get(
+                "emailAddress", "<unknown>"
+            )
             return True, f"ok (as {acc})"
         elif r.status_code == 401:
             return False, "unauthorized (bad token)"
@@ -54,10 +61,13 @@ class JiraClient:
 
     def get_issue(self, key: str) -> Optional[dict]:
         url = f"{self.base_url}/rest/api/3/issue/{key}"
-        with self._client() as c:
-            r = c.get(url)
-            if r.status_code == 200:
-                return r.json()
+        try:
+            with self._client() as c:
+                r = c.get(url)
+                if r.status_code == 200:
+                    return r.json()
+        except Exception:
+            pass
         return None
 
     def get_issue_summary(self, key: str) -> Optional[str]:
@@ -69,10 +79,13 @@ class JiraClient:
 
     def _transitions(self, key: str) -> list[dict]:
         url = f"{self.base_url}/rest/api/3/issue/{key}/transitions"
-        with self._client() as c:
-            r = c.get(url)
-            if r.status_code == 200:
-                return r.json().get("transitions", [])
+        try:
+            with self._client() as c:
+                r = c.get(url)
+                if r.status_code == 200:
+                    return r.json().get("transitions", [])
+        except Exception:
+            pass
         return []
 
     def transition_by_name(self, key: str, name: str) -> bool:
@@ -85,9 +98,13 @@ class JiraClient:
         if not tid:
             return False
         url = f"{self.base_url}/rest/api/3/issue/{key}/transitions"
-        with self._client() as c:
-            r = c.post(url, json={"transition": {"id": tid}})
-            return r.status_code in (204, 200)
+        try:
+            with self._client() as c:
+                r = c.post(url, json={"transition": {"id": tid}})
+                return r.status_code in (204, 200)
+        except Exception:
+            pass
+        return False
 
     def assign_issue(self, key: str, account_id: str) -> bool:
         """
@@ -100,9 +117,13 @@ class JiraClient:
         Returns True if successful, False otherwise.
         """
         url = f"{self.base_url}/rest/api/3/issue/{key}/assignee"
-        with self._client() as c:
-            r = c.put(url, json={"accountId": account_id})
-            return r.status_code in (204, 200)
+        try:
+            with self._client() as c:
+                r = c.put(url, json={"accountId": account_id})
+                return r.status_code in (204, 200)
+        except Exception:
+            pass
+        return False
 
     def add_comment(self, key: str, body: str) -> bool:
         url = f"{self.base_url}/rest/api/3/issue/{key}/comment"
@@ -111,22 +132,20 @@ class JiraClient:
             "type": "doc",
             "version": 1,
             "content": [
-                {
-                    "type": "paragraph",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": body
-                        }
-                    ]
-                }
-            ]
+                {"type": "paragraph", "content": [{"type": "text", "text": body}]}
+            ],
         }
-        with self._client() as c:
-            r = c.post(url, json={"body": adf_body})
-            return r.status_code in (201, 200)
+        try:
+            with self._client() as c:
+                r = c.post(url, json={"body": adf_body})
+                return r.status_code in (201, 200)
+        except Exception:
+            pass
+        return False
 
-    def add_comment_with_link(self, key: str, text: str, link_text: str, link_url: str) -> bool:
+    def add_comment_with_link(
+        self, key: str, text: str, link_text: str, link_url: str
+    ) -> bool:
         """
         Add a comment with a clickable link.
 
@@ -144,37 +163,26 @@ class JiraClient:
             "type": "doc",
             "version": 1,
             "content": [
-                {
-                    "type": "paragraph",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": text
-                        }
-                    ]
-                },
+                {"type": "paragraph", "content": [{"type": "text", "text": text}]},
                 {
                     "type": "paragraph",
                     "content": [
                         {
                             "type": "text",
                             "text": link_text,
-                            "marks": [
-                                {
-                                    "type": "link",
-                                    "attrs": {
-                                        "href": link_url
-                                    }
-                                }
-                            ]
+                            "marks": [{"type": "link", "attrs": {"href": link_url}}],
                         }
-                    ]
-                }
-            ]
+                    ],
+                },
+            ],
         }
-        with self._client() as c:
-            r = c.post(url, json={"body": adf_body})
-            return r.status_code in (201, 200)
+        try:
+            with self._client() as c:
+                r = c.post(url, json={"body": adf_body})
+                return r.status_code in (201, 200)
+        except Exception:
+            pass
+        return False
 
     def get_issue_types(self, project_key: str) -> list[dict]:
         """
@@ -184,23 +192,27 @@ class JiraClient:
         """
         url = f"{self.base_url}/rest/api/3/issue/createmeta"
         params = {"projectKeys": project_key, "expand": "projects.issuetypes"}
-        with self._client() as c:
-            r = c.get(url, params=params)
-            if r.status_code != 200:
-                return []
-            data = r.json()
-            projects = data.get("projects", [])
-            if not projects:
-                return []
-            issue_types = projects[0].get("issuetypes", [])
-            return [
-                {
-                    "id": it.get("id"),
-                    "name": it.get("name"),
-                    "description": it.get("description", "")
-                }
-                for it in issue_types
-            ]
+        try:
+            with self._client() as c:
+                r = c.get(url, params=params)
+                if r.status_code != 200:
+                    return []
+                data = r.json()
+                projects = data.get("projects", [])
+                if not projects:
+                    return []
+                issue_types = projects[0].get("issuetypes", [])
+                return [
+                    {
+                        "id": it.get("id"),
+                        "name": it.get("name"),
+                        "description": it.get("description", ""),
+                    }
+                    for it in issue_types
+                ]
+        except Exception:
+            pass
+        return []
 
     def get_create_metadata(self, project_key: str, issue_type_name: str) -> dict:
         """
@@ -212,20 +224,24 @@ class JiraClient:
         params = {
             "projectKeys": project_key,
             "issuetypeNames": issue_type_name,
-            "expand": "projects.issuetypes.fields"
+            "expand": "projects.issuetypes.fields",
         }
-        with self._client() as c:
-            r = c.get(url, params=params)
-            if r.status_code != 200:
-                return {}
-            data = r.json()
-            projects = data.get("projects", [])
-            if not projects:
-                return {}
-            issue_types = projects[0].get("issuetypes", [])
-            if not issue_types:
-                return {}
-            return issue_types[0].get("fields", {})
+        try:
+            with self._client() as c:
+                r = c.get(url, params=params)
+                if r.status_code != 200:
+                    return {}
+                data = r.json()
+                projects = data.get("projects", [])
+                if not projects:
+                    return {}
+                issue_types = projects[0].get("issuetypes", [])
+                if not issue_types:
+                    return {}
+                return issue_types[0].get("fields", {})
+        except Exception:
+            pass
+        return {}
 
     def create_issue(
         self,
@@ -235,7 +251,7 @@ class JiraClient:
         description: Optional[str] = None,
         labels: Optional[list[str]] = None,
         custom_fields: Optional[dict] = None,
-        assign_to_self: bool = True
+        assign_to_self: bool = True,
     ) -> Optional[str]:
         """
         Create a new Jira issue.
@@ -256,7 +272,7 @@ class JiraClient:
         fields = {
             "project": {"key": project_key},
             "summary": summary,
-            "issuetype": {"name": issue_type}
+            "issuetype": {"name": issue_type},
         }
 
         # Assign to current user if requested
@@ -273,14 +289,9 @@ class JiraClient:
                 "content": [
                     {
                         "type": "paragraph",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": description
-                            }
-                        ]
+                        "content": [{"type": "text", "text": description}],
                     }
-                ]
+                ],
             }
 
         if labels:
@@ -299,20 +310,21 @@ class JiraClient:
                     data = r.json()
                     return data.get("key")
                 else:
-                    # Log the error for debugging
+                    # Keep logs concise and avoid leaking response bodies.
                     import sys
-                    print(f"[DEBUG] Jira API error {r.status_code}: {r.text}", file=sys.stderr)
+
+                    print(f"[DEBUG] Jira API error {r.status_code}", file=sys.stderr)
                     return None
         except Exception as e:
             import sys
-            print(f"[DEBUG] Exception creating issue: {e}", file=sys.stderr)
+
+            print(
+                f"[DEBUG] Exception creating issue: {type(e).__name__}",
+                file=sys.stderr,
+            )
             return None
 
-    def search_issues_by_date(
-        self,
-        jql: str,
-        max_results: int = 100
-    ) -> list[dict]:
+    def search_issues_by_date(self, jql: str, max_results: int = 100) -> list[dict]:
         """
         Search Jira issues using JQL.
 
@@ -326,7 +338,7 @@ class JiraClient:
         params = {
             "jql": jql,
             "maxResults": max_results,
-            "fields": "key,summary,status,created,updated,assignee"
+            "fields": "key,summary,status,created,updated,assignee",
         }
 
         try:
@@ -339,14 +351,16 @@ class JiraClient:
                     result = []
                     for issue in issues:
                         fields = issue.get("fields", {})
-                        result.append({
-                            "key": issue.get("key"),
-                            "summary": fields.get("summary"),
-                            "status": fields.get("status"),
-                            "created": fields.get("created"),
-                            "updated": fields.get("updated"),
-                            "assignee": fields.get("assignee")
-                        })
+                        result.append(
+                            {
+                                "key": issue.get("key"),
+                                "summary": fields.get("summary"),
+                                "status": fields.get("status"),
+                                "created": fields.get("created"),
+                                "updated": fields.get("updated"),
+                                "assignee": fields.get("assignee"),
+                            }
+                        )
                     return result
         except Exception:
             pass
@@ -356,8 +370,8 @@ class JiraClient:
     def get_issues_created_since(
         self,
         project_keys: str | list[str],
-        since: "datetime",
-        assignee: Optional[str] = "currentUser()"
+        since: datetime,
+        assignee: Optional[str] = "currentUser()",
     ) -> list[dict]:
         """
         Get issues created since a given date.
@@ -369,16 +383,15 @@ class JiraClient:
 
         Returns list of issue objects.
         """
-        from datetime import datetime
         since_str = since.strftime("%Y-%m-%d %H:%M")
 
         # Handle multiple projects
         if isinstance(project_keys, list):
             if not project_keys:
                 return []
-            project_filter = f'project in ({", ".join(project_keys)})'
+            project_filter = f"project in ({', '.join(project_keys)})"
         else:
-            project_filter = f'project = {project_keys}'
+            project_filter = f"project = {project_keys}"
 
         jql = f'{project_filter} AND created >= "{since_str}"'
         if assignee:
@@ -389,8 +402,8 @@ class JiraClient:
     def get_issues_updated_since(
         self,
         project_keys: str | list[str],
-        since: "datetime",
-        assignee: Optional[str] = "currentUser()"
+        since: datetime,
+        assignee: Optional[str] = "currentUser()",
     ) -> list[dict]:
         """
         Get issues updated since a given date (excluding newly created).
@@ -402,18 +415,19 @@ class JiraClient:
 
         Returns list of issue objects.
         """
-        from datetime import datetime
         since_str = since.strftime("%Y-%m-%d %H:%M")
 
         # Handle multiple projects
         if isinstance(project_keys, list):
             if not project_keys:
                 return []
-            project_filter = f'project in ({", ".join(project_keys)})'
+            project_filter = f"project in ({', '.join(project_keys)})"
         else:
-            project_filter = f'project = {project_keys}'
+            project_filter = f"project = {project_keys}"
 
-        jql = f'{project_filter} AND updated >= "{since_str}" AND created < "{since_str}"'
+        jql = (
+            f'{project_filter} AND updated >= "{since_str}" AND created < "{since_str}"'
+        )
         if assignee:
             jql += f" AND assignee = {assignee}"
 

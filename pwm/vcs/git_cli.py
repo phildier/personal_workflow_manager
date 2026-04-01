@@ -1,31 +1,46 @@
-
 from __future__ import annotations
 from pathlib import Path
 from datetime import datetime
+from typing import Optional
 import subprocess
 
+
 def _run(args: list[str], repo_root: Path, capture: bool = True):
-    return subprocess.run(["git", "-C", str(repo_root), *args], capture_output=capture, text=True)
+    return subprocess.run(
+        ["git", "-C", str(repo_root), *args], capture_output=capture, text=True
+    )
+
 
 def current_branch(repo_root: Path) -> str | None:
     r = _run(["rev-parse", "--abbrev-ref", "HEAD"], repo_root)
     return r.stdout.strip() if r.returncode == 0 else None
 
-def create_branch(repo_root: Path, branch_name: str, from_ref: str | None = None, remote: str = "origin") -> bool:
+
+def create_branch(
+    repo_root: Path,
+    branch_name: str,
+    from_ref: str | None = None,
+    remote: str = "origin",
+) -> bool:
     if from_ref is None:
         from_ref = get_default_branch(repo_root, remote)
     r = _run(["checkout", "-b", branch_name, from_ref], repo_root, capture=False)
     return r.returncode == 0
 
+
 def switch_branch(repo_root: Path, branch_name: str) -> bool:
     r = _run(["checkout", branch_name], repo_root, capture=False)
     return r.returncode == 0
+
 
 def branch_exists(repo_root: Path, branch_name: str) -> bool:
     r = _run(["rev-parse", "--verify", branch_name], repo_root)
     return r.returncode == 0
 
-def infer_github_repo_from_remote(repo_root: Path, remote: str = "origin") -> str | None:
+
+def infer_github_repo_from_remote(
+    repo_root: Path, remote: str = "origin"
+) -> str | None:
     r = _run(["remote", "get-url", remote], repo_root)
     if r.returncode != 0:
         return None
@@ -40,6 +55,7 @@ def infer_github_repo_from_remote(repo_root: Path, remote: str = "origin") -> st
     if path.endswith(".git"):
         path = path[:-4]
     return path if "/" in path else None
+
 
 def get_default_branch(repo_root: Path, remote: str = "origin") -> str:
     """
@@ -59,7 +75,7 @@ def get_default_branch(repo_root: Path, remote: str = "origin") -> str:
         # Output is like "refs/remotes/origin/main"
         ref = r.stdout.strip()
         if ref.startswith(f"refs/remotes/{remote}/"):
-            branch = ref[len(f"refs/remotes/{remote}/"):]
+            branch = ref[len(f"refs/remotes/{remote}/") :]
             return f"{remote}/{branch}"
 
     # If remote HEAD is not set, try to set it by fetching remote info (suppress stderr)
@@ -69,7 +85,7 @@ def get_default_branch(repo_root: Path, remote: str = "origin") -> str:
         if r.returncode == 0 and r.stdout.strip():
             ref = r.stdout.strip()
             if ref.startswith(f"refs/remotes/{remote}/"):
-                branch = ref[len(f"refs/remotes/{remote}/"):]
+                branch = ref[len(f"refs/remotes/{remote}/") :]
                 return f"{remote}/{branch}"
 
     # Fall back to checking for common default branches
@@ -81,11 +97,12 @@ def get_default_branch(repo_root: Path, remote: str = "origin") -> str:
     # Ultimate fallback
     return f"{remote}/main"
 
+
 def get_commits_since_base(
     repo_root: Path,
     base_branch: Optional[str] = None,
     remote: str = "origin",
-    since: Optional[datetime] = None
+    since: Optional[datetime] = None,
 ) -> list[dict]:
     """
     Get list of commits on current branch since it diverged from base branch.
@@ -103,11 +120,7 @@ def get_commits_since_base(
 
     # Get commits between base and HEAD
     # Format: %H = full hash, %s = subject, %b = body, %ct = committer timestamp (Unix), separated by special markers
-    args = [
-        "log",
-        f"{base_branch}..HEAD",
-        "--format=%H%x00%s%x00%b%x00%ct%x1e"
-    ]
+    args = ["log", f"{base_branch}..HEAD", "--format=%H%x00%s%x00%b%x00%ct%x1e"]
 
     # Add --since filter if timestamp provided
     if since:
@@ -129,7 +142,7 @@ def get_commits_since_base(
             commit_dict = {
                 "hash": parts[0],
                 "subject": parts[1],
-                "body": parts[2] if len(parts) > 2 else ""
+                "body": parts[2] if len(parts) > 2 else "",
             }
             # Add timestamp if available
             if len(parts) > 3:
@@ -141,7 +154,10 @@ def get_commits_since_base(
 
     return commits
 
-def get_diff_since_base(repo_root: Path, base_branch: Optional[str] = None, remote: str = "origin") -> str:
+
+def get_diff_since_base(
+    repo_root: Path, base_branch: Optional[str] = None, remote: str = "origin"
+) -> str:
     """
     Get the full diff of changes since base branch.
     """
@@ -151,7 +167,10 @@ def get_diff_since_base(repo_root: Path, base_branch: Optional[str] = None, remo
     r = _run(["diff", f"{base_branch}...HEAD"], repo_root)
     return r.stdout if r.returncode == 0 else ""
 
-def push_branch(repo_root: Path, branch: str, remote: str = "origin", set_upstream: bool = True) -> bool:
+
+def push_branch(
+    repo_root: Path, branch: str, remote: str = "origin", set_upstream: bool = True
+) -> bool:
     """
     Push a branch to remote.
 

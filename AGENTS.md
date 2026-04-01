@@ -5,10 +5,13 @@
 The Personal Workflow Manager (pwm) is a Python-based command-line application that integrates with Jira, Git, and GitHub to automate and streamline daily developer workflows.
 
 It provides commands for:
+- Project context display (`pwm context`)
 - Project setup (`pwm init`)
 - Context-aware branch creation and Jira issue tracking (`pwm work-start`)
 - Pull request creation and management (`pwm pr`)
 - Work status updates (`pwm work-end`)
+- Daily work summaries (`pwm daily-summary`)
+- Shell prompt integration (`pwm prompt`)
 - System self-checks for environment validation (`pwm self-check`)
 
 The goal of pwm is to automate common engineering tasks while maintaining a modular, extensible design.
@@ -82,6 +85,13 @@ pwm work-end -m "Ready for review" --request-review
 pwm self-check
 ```
 
+**Generate daily work summary**
+```bash
+pwm daily-summary  # or: pwm ds
+pwm ds --since "2025-01-10 09:00"
+pwm ds --no-ai --output daily.md
+```
+
 **Show prompt info (for shell integration)**
 ```bash
 pwm prompt
@@ -137,7 +147,7 @@ The codebase follows a domain-based architecture where each directory represents
   - `command.py`: Implements the `pwm prompt` command for shell integration
 
 - **PR Domain (pwm/pr/)**
-  - `open.py`: Implements the `pwm pr` command for pull request creation
+  - `open.py`: Implements the `pwm pr` command for pull request creation with AI-powered commit and diff summaries
 
 - **Config (pwm/config/)**
   Defines configuration schema with Pydantic models.
@@ -154,8 +164,8 @@ The codebase follows a domain-based architecture where each directory represents
 - **AI (pwm/ai/)**
   Optional OpenAI integration for AI-powered summaries and content generation. Fully optional with graceful fallback when not configured.
   - `openai_client.py`: REST API client for OpenAI completions API
-  - `prompts.py`: Prompt templates for different summarization tasks (PR descriptions, work-end updates, commit messages)
-  - `summarizer.py`: High-level functions that combine prompts with commit/diff data
+  - `prompts.py`: Prompt templates for different summarization tasks (PR commit summaries, PR diff summaries, work-end updates, daily summaries)
+  - `summarizer.py`: High-level functions that combine prompts with commit/diff data, including intelligent diff truncation
 
 ----------------------------------------
 

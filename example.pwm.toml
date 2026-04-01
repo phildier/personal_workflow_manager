@@ -27,17 +27,21 @@ labels = ["backend", "api"]
 # These are automatically saved when you use `pwm work-start --new` and choose to save defaults
 # You can also manually configure them here
 # Find custom field IDs by looking at Jira API responses or checking field settings
-# Format: customfield_XXXXX = value (string, object, or array depending on field type)
+#
+# Syntax guide:
+# - Object values (single-select): Use nested table [jira.issue_defaults.custom_fields.FIELD_ID] with value = "..."
+# - Primitive values (strings, numbers): Use inline under [jira.issue_defaults.custom_fields] with FIELD_ID = "value"
+# - Array values (multi-select): Use inline array like FIELD_ID = [{ value = "Option1" }, { value = "Option2" }]
 
-# Example: Single-select custom field (like "Responsible Team")
+# Example: Single-select custom field (object value)
 [jira.issue_defaults.custom_fields.customfield_10370]
 value = "Platform Team"
 
-# Example: String custom field
+# Example: String custom field (primitive value)
 # [jira.issue_defaults.custom_fields]
 # customfield_12345 = "Default value"
 
-# Example: Multi-select custom field
+# Example: Multi-select custom field (array value)
 # [jira.issue_defaults.custom_fields]
 # customfield_67890 = [{ value = "Option1" }, { value = "Option2" }]
 

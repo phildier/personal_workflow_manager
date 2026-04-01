@@ -3,7 +3,9 @@ from pwm.ai.summarizer import (
     format_commits_for_prompt,
     summarize_commits_for_pr,
     summarize_work_end,
-    summarize_daily_work
+    summarize_daily_work,
+    truncate_diff,
+    summarize_diff_for_pr
 )
 
 def test_format_commits_for_prompt():
@@ -169,3 +171,112 @@ def test_summarize_daily_work_handles_missing_fields():
     assert result == "Summary"
     assert "Untitled" in mock_client.prompt
     assert "No summary" in mock_client.prompt
+
+
+# Tests for diff summarization
+
+def test_truncate_diff_small_diff():
+    """Test that small diffs are not truncated."""
+    diff = "diff --git a/test.py b/test.py\n+def foo():\n+    pass"
+    result, was_truncated = truncate_diff(diff, max_chars=1000)
+    assert result == diff
+    assert was_truncated is False
+
+
+def test_truncate_diff_large_diff():
+    """Test that large diffs are truncated."""
+    # Create a large diff
+    diff = "diff --git a/test.py b/test.py\n" + ("+line\n" * 5000)
+    result, was_truncated = truncate_diff(diff, max_chars=10000)
+    # Allow small buffer for truncation marker
+    assert len(result) <= 10100
+    assert was_truncated is True
+
+
+def test_truncate_diff_skips_generated_files():
+    """Test that truncate_diff skips generated files like package-lock.json."""
+    # Create a large package-lock.json chunk and a small source file
+    large_lock_content = "+  \"dependencies\": {}\n" * 1000
+    diff = f"""diff --git a/package-lock.json b/package-lock.json
+{large_lock_content}
+diff --git a/src/main.py b/src/main.py
++def hello():
++    print("world")
+"""
+    result, was_truncated = truncate_diff(diff, max_chars=500)
+
+    # Should skip package-lock.json and keep source file
+    assert "package-lock.json" not in result
+    assert "main.py" in result
+    assert "hello" in result
+    assert was_truncated is True
+
+
+def test_truncate_diff_empty():
+    """Test truncate_diff with empty diff."""
+    diff = ""
+    result, was_truncated = truncate_diff(diff)
+    assert result == ""
+    assert was_truncated is False
+
+
+def test_summarize_diff_for_pr_returns_none_without_openai():
+    """Test that summarize_diff_for_pr returns None when OpenAI not configured."""
+    diff = "diff --git a/test.py b/test.py\n+def foo():\n+    pass"
+    result = summarize_diff_for_pr(diff, None)
+    assert result is None
+
+
+def test_summarize_diff_for_pr_returns_none_without_diff():
+    """Test that summarize_diff_for_pr returns None when diff is empty."""
+    class MockOpenAI:
+        pass
+
+    result = summarize_diff_for_pr("", MockOpenAI())
+    assert result is None
+
+
+def test_summarize_diff_for_pr_calls_openai():
+    """Test that summarize_diff_for_pr calls OpenAI with correct prompt."""
+    class MockOpenAI:
+        def __init__(self):
+            self.called = False
+            self.prompt = None
+            self.system = None
+
+        def complete(self, prompt, system=None):
+            self.called = True
+            self.prompt = prompt
+            self.system = system
+            return "Added foo function to test.py for handling user input."
+
+    mock_client = MockOpenAI()
+    diff = "diff --git a/test.py b/test.py\n+def foo():\n+    pass"
+
+    result = summarize_diff_for_pr(diff, mock_client)
+
+    assert mock_client.called
+    assert result == "Added foo function to test.py for handling user input."
+    assert "diff --git" in mock_client.prompt
+    assert "test.py" in mock_client.prompt
+
+
+def test_summarize_diff_for_pr_handles_truncation():
+    """Test that summarize_diff_for_pr handles large diffs with truncation note."""
+    class MockOpenAI:
+        def __init__(self):
+            self.prompt = None
+
+        def complete(self, prompt, system=None):
+            self.prompt = prompt
+            return "Summary of changes"
+
+    mock_client = MockOpenAI()
+    # Create large diff that will be truncated
+    diff = "diff --git a/test.py b/test.py\n" + ("+line\n" * 5000)
+
+    result = summarize_diff_for_pr(diff, mock_client)
+
+    assert result == "Summary of changes"
+    # Should include truncation note in prompt
+    assert "truncated" in mock_client.prompt.lower()
