@@ -6,6 +6,24 @@ import sys
 from typing import Iterator
 
 
+def _configure_readline_backspace() -> None:
+    """Ensure both DEL and Ctrl-H act as backspace in readline."""
+    try:
+        import readline
+    except ImportError:
+        return
+
+    bindings = [
+        '"\\C-h": backward-delete-char',
+        '"\\C-?": backward-delete-char',
+    ]
+    for binding in bindings:
+        try:
+            readline.parse_and_bind(binding)
+        except Exception:
+            pass
+
+
 def _is_delete_char(value: object) -> bool:
     """Return True when value is terminal DEL (0x7f)."""
     return value in (127, "\x7f", b"\x7f")
@@ -23,9 +41,7 @@ def _to_delete_char(example: object) -> object:
 @contextmanager
 def ensure_backspace_support() -> Iterator[None]:
     """Temporarily set terminal erase key to DEL while prompting."""
-    if not sys.stdin.isatty():
-        yield
-        return
+    _configure_readline_backspace()
 
     try:
         import termios
@@ -33,11 +49,26 @@ def ensure_backspace_support() -> Iterator[None]:
         yield
         return
 
-    fd = sys.stdin.fileno()
+    fd = None
+    should_close_fd = False
+
+    try:
+        fd = os.open("/dev/tty", os.O_RDWR)
+        should_close_fd = True
+    except OSError:
+        if not sys.stdin.isatty():
+            yield
+            return
+        fd = sys.stdin.fileno()
 
     try:
         attrs = termios.tcgetattr(fd)
     except termios.error:
+        if should_close_fd:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
         yield
         return
 
@@ -57,6 +88,11 @@ def ensure_backspace_support() -> Iterator[None]:
     try:
         termios.tcsetattr(fd, termios.TCSANOW, updated_attrs)
     except termios.error:
+        if should_close_fd:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
         yield
         return
 
@@ -131,3 +167,8 @@ def ensure_backspace_support() -> Iterator[None]:
     finally:
         restore_signal_handlers()
         restore_terminal()
+        if should_close_fd:
+            try:
+                os.close(fd)
+            except OSError:
+                pass

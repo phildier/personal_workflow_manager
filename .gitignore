@@ -1,2 +1,3 @@
 .claude
 .pwm.toml
+*.egg-info/

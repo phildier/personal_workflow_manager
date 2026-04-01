@@ -1,7 +1,7 @@
 import sys
 from types import SimpleNamespace
 
-from pwm.work.terminal import ensure_backspace_support
+from pwm.work.terminal import ensure_backspace_support, _configure_readline_backspace
 
 
 def test_ensure_backspace_support_sets_and_restores_erase(monkeypatch):
@@ -205,3 +205,56 @@ def test_ensure_backspace_support_restores_on_signal(monkeypatch):
         (11, 0, b"\x08"),
     ]
     assert kill_calls == [(1234, 2)]
+
+
+def test_ensure_backspace_support_uses_dev_tty_when_available(monkeypatch):
+    calls = []
+    close_calls = []
+    erase_index = 0
+
+    class FakeStdin:
+        def isatty(self):
+            return False
+
+    def fake_tcgetattr(fd):
+        assert fd == 12
+        return [0, 0, 0, 0, 0, 0, [b"\x08"]]
+
+    def fake_tcsetattr(fd, when, attrs):
+        calls.append((fd, when, attrs[6][erase_index]))
+
+    fake_termios = SimpleNamespace(
+        VERASE=erase_index,
+        TCSANOW=0,
+        error=OSError,
+        tcgetattr=fake_tcgetattr,
+        tcsetattr=fake_tcsetattr,
+    )
+
+    monkeypatch.setattr(sys, "stdin", FakeStdin())
+    monkeypatch.setitem(sys.modules, "termios", fake_termios)
+    monkeypatch.setattr("pwm.work.terminal.os.open", lambda path, flags: 12)
+    monkeypatch.setattr("pwm.work.terminal.os.close", lambda fd: close_calls.append(fd))
+
+    with ensure_backspace_support():
+        pass
+
+    assert calls == [
+        (12, 0, b"\x7f"),
+        (12, 0, b"\x08"),
+    ]
+    assert close_calls == [12]
+
+
+def test_configure_readline_backspace_binds_del_and_ctrl_h(monkeypatch):
+    calls = []
+
+    fake_readline = SimpleNamespace(
+        parse_and_bind=lambda binding: calls.append(binding)
+    )
+    monkeypatch.setitem(sys.modules, "readline", fake_readline)
+
+    _configure_readline_backspace()
+
+    assert '"\\C-h": backward-delete-char' in calls
+    assert '"\\C-?": backward-delete-char' in calls
