@@ -146,3 +146,24 @@ def test_get_closed_prs(monkeypatch):
     assert len(results) == 2
     assert call_count["search"] == 2  # Now expects 2 searches (merged + unmerged)
     assert call_count["details"] == 2  # Should fetch details for each PR
+
+
+def test_github_debug_logging_respects_pwm_debug(monkeypatch, capsys):
+    gh = GitHubClient(base_url="https://api.github.com", token="t")
+
+    class FailingClient:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def get(self, *args, **kwargs):
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(httpx, "Client", lambda timeout=10.0: FailingClient())
+    monkeypatch.setenv("PWM_DEBUG", "1")
+
+    assert gh.get_current_user() is None
+    captured = capsys.readouterr()
+    assert "[DEBUG] GitHubClient: get_current_user request raised exception" in captured.err

@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional, Tuple
 from datetime import datetime
+import os
+import sys
 import httpx
 
 DEFAULT_GH_API = "https://api.github.com"
@@ -11,6 +13,11 @@ DEFAULT_GH_API = "https://api.github.com"
 class GitHubClient:
     base_url: str
     token: str
+
+    def _debug(self, message: str) -> None:
+        """Emit debug diagnostics when PWM_DEBUG is enabled."""
+        if os.getenv("PWM_DEBUG") == "1":
+            print(f"[DEBUG] GitHubClient: {message}", file=sys.stderr)
 
     @classmethod
     def from_config(cls, cfg: dict) -> Optional['GitHubClient']:
@@ -30,13 +37,16 @@ class GitHubClient:
             with httpx.Client(timeout=10.0) as c:
                 r = c.get(url, headers=self._headers())
         except Exception as e:
+            self._debug(f"ping network error: {type(e).__name__}")
             return False, f"network error: {e}"
         if r.status_code == 200:
             login = r.json().get("login", "<unknown>")
             return True, f"ok (as {login})"
         elif r.status_code == 401:
+            self._debug("ping unauthorized (401)")
             return False, "unauthorized (bad token)"
         else:
+            self._debug(f"ping returned HTTP {r.status_code}")
             return False, f"HTTP {r.status_code}"
 
     def get_current_user(self) -> Optional[str]:
@@ -51,8 +61,9 @@ class GitHubClient:
                 r = c.get(url, headers=self._headers())
                 if r.status_code == 200:
                     return r.json().get("login")
+                self._debug(f"get_current_user returned HTTP {r.status_code}")
         except Exception:
-            pass
+            self._debug("get_current_user request raised exception")
         return None
 
     def list_prs(self, repo: str, head: Optional[str] = None, state: str = "open") -> list[dict]:
@@ -76,8 +87,9 @@ class GitHubClient:
                 r = c.get(url, headers=self._headers(), params=params)
                 if r.status_code == 200:
                     return r.json()
+                self._debug(f"list_prs returned HTTP {r.status_code}")
         except Exception:
-            pass
+            self._debug("list_prs request raised exception")
         return []
 
     def create_pr(
@@ -114,8 +126,9 @@ class GitHubClient:
                 r = c.post(url, headers=self._headers(), json=payload)
                 if r.status_code == 201:
                     return r.json()
+                self._debug(f"create_pr returned HTTP {r.status_code}")
         except Exception:
-            pass
+            self._debug("create_pr request raised exception")
         return None
 
     def get_pr_for_branch(self, repo: str, branch: str, state: str = "open") -> Optional[dict]:
@@ -154,8 +167,9 @@ class GitHubClient:
                 r = c.get(url, headers=self._headers())
                 if r.status_code == 200:
                     return r.json()
+                self._debug(f"get_pr_details #{pr_number} returned HTTP {r.status_code}")
         except Exception:
-            pass
+            self._debug(f"get_pr_details #{pr_number} request raised exception")
         return None
 
     def get_pr_reviews(self, repo: str, pr_number: int) -> list[dict]:
@@ -175,8 +189,9 @@ class GitHubClient:
                 r = c.get(url, headers=self._headers())
                 if r.status_code == 200:
                     return r.json()
+                self._debug(f"get_pr_reviews #{pr_number} returned HTTP {r.status_code}")
         except Exception:
-            pass
+            self._debug(f"get_pr_reviews #{pr_number} request raised exception")
         return []
 
     def get_pr_comments(self, repo: str, pr_number: int) -> list[dict]:
@@ -196,8 +211,9 @@ class GitHubClient:
                 r = c.get(url, headers=self._headers())
                 if r.status_code == 200:
                     return r.json()
+                self._debug(f"get_pr_comments #{pr_number} returned HTTP {r.status_code}")
         except Exception:
-            pass
+            self._debug(f"get_pr_comments #{pr_number} request raised exception")
         return []
 
     def add_pr_comment(self, repo: str, pr_number: int, body: str) -> Optional[dict]:
@@ -218,8 +234,9 @@ class GitHubClient:
                 r = c.post(url, headers=self._headers(), json={"body": body})
                 if r.status_code == 201:
                     return r.json()
+                self._debug(f"add_pr_comment #{pr_number} returned HTTP {r.status_code}")
         except Exception:
-            pass
+            self._debug(f"add_pr_comment #{pr_number} request raised exception")
         return None
 
     def request_reviewers(
@@ -255,7 +272,7 @@ class GitHubClient:
                 r = c.post(url, headers=self._headers(), json=payload)
                 return r.status_code in (201, 200)
         except Exception:
-            pass
+            self._debug(f"request_reviewers #{pr_number} request raised exception")
         return False
 
     def get_last_pwm_comment_time(self, repo: str, pr_number: int) -> Optional[datetime]:
@@ -284,6 +301,7 @@ class GitHubClient:
                         created_at = datetime.fromisoformat(created_at_str.replace("Z", "+00:00"))
                         pwm_comments.append(created_at)
                     except Exception:
+                        self._debug("invalid created_at timestamp in PR comment")
                         continue
 
         return max(pwm_comments) if pwm_comments else None
@@ -371,7 +389,7 @@ class GitHubClient:
                     if page > 10:
                         break
         except Exception:
-            pass
+            self._debug("search_prs_by_date request raised exception")
 
         return results
 
@@ -485,7 +503,7 @@ class GitHubClient:
                         if page > 10:
                             break
             except Exception:
-                pass
+                self._debug("get_closed_prs query request raised exception")
             return prs
 
         # Fetch both merged and closed PRs

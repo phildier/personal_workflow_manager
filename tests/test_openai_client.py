@@ -1,5 +1,6 @@
 
 from pwm.ai.openai_client import OpenAIClient
+import httpx
 
 def test_openai_client_from_config_returns_none_without_api_key():
     """Test that from_config returns None when API key is missing."""
@@ -47,3 +48,26 @@ def test_openai_client_headers():
     headers = client._headers()
     assert headers["Authorization"] == "Bearer sk-test123"
     assert headers["Content-Type"] == "application/json"
+
+
+def test_openai_complete_debug_logging_respects_pwm_debug(monkeypatch, capsys):
+    config = {"openai": {"api_key": "sk-test123"}}
+    client = OpenAIClient.from_config(config)
+
+    class FailingClient:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def post(self, *args, **kwargs):
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(httpx, "Client", lambda timeout=30.0: FailingClient())
+    monkeypatch.setenv("PWM_DEBUG", "1")
+
+    assert client is not None
+    assert client.complete("hello") is None
+    captured = capsys.readouterr()
+    assert "[DEBUG] OpenAIClient: complete request raised exception" in captured.err

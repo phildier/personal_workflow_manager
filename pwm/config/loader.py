@@ -5,6 +5,7 @@ from typing import Dict, Any
 import os
 
 from pwm.config.models import PWMConfig
+from pwm.context.types import ContextMeta
 import tomllib as _toml
 
 USER_CONFIG_PATH = Path.home() / ".config" / "pwm" / "config.toml"
@@ -24,8 +25,6 @@ def _deep_merge(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 def load_merged_config(repo_root: Path):
-    from pwm.context.resolver import ContextMeta
-
     base = PWMConfig().as_dict()
     user_cfg, project_cfg = {}, {}
 

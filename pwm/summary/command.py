@@ -3,6 +3,8 @@
 from datetime import datetime
 from typing import Optional
 from pathlib import Path
+import os
+import sys
 from rich import print as rprint
 
 from pwm.context.resolver import resolve_context
@@ -13,6 +15,12 @@ from pwm.github.client import GitHubClient
 from pwm.jira.client import JiraClient
 from pwm.ai.openai_client import OpenAIClient
 from pwm.ai.summarizer import summarize_daily_work
+
+
+def _debug(message: str) -> None:
+    """Emit debug diagnostics when PWM_DEBUG is enabled."""
+    if os.getenv("PWM_DEBUG") == "1":
+        print(f"[DEBUG] summary.command: {message}", file=sys.stderr)
 
 
 def daily_summary(
@@ -38,6 +46,7 @@ def daily_summary(
     try:
         ctx = resolve_context()
     except RuntimeError as e:
+        _debug(f"resolve_context failed: {type(e).__name__}")
         rprint(f"[red]Error:[/red] {e}")
         return 1
 
@@ -60,6 +69,7 @@ def daily_summary(
 
     # Check if any service is configured
     if not github_client and not jira_client:
+        _debug("both GitHub and Jira clients are unavailable")
         rprint("[yellow]Warning:[/yellow] Neither GitHub nor Jira is configured.")
         rprint("[dim]Configure at least one service in .pwm.toml or ~/.config/pwm/config.toml[/dim]")
         rprint()
@@ -73,6 +83,12 @@ def daily_summary(
         github_client=github_client,
         jira_client=jira_client,
         config=ctx.config
+    )
+    _debug(
+        "collected "
+        f"prs(opened={len(data.prs_opened)}, merged={len(data.prs_merged)}, "
+        f"closed={len(data.prs_closed)}), "
+        f"jira(created={len(data.jira_created)}, updated={len(data.jira_updated)})"
     )
 
     # Generate AI summary
@@ -93,6 +109,7 @@ def daily_summary(
         if ai_summary:
             rprint("[green]✓[/green] AI summary generated")
         else:
+            _debug("AI summary generation returned no content")
             rprint("[dim]No AI summary generated (insufficient data or API error)[/dim]")
     rprint()
 

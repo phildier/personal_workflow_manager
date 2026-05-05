@@ -316,3 +316,24 @@ def test_create_issue_debug_output_is_sanitized(monkeypatch, capsys):
     captured = capsys.readouterr()
     assert "Jira API error 400" in captured.err
     assert "{" not in captured.err
+
+
+def test_jira_debug_logging_respects_pwm_debug(monkeypatch, capsys):
+    jc = JiraClient(base_url="https://example.atlassian.net", email="u", token="t")
+
+    class FailingClient:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def get(self, *args, **kwargs):
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(JiraClient, "_client", lambda self: FailingClient())
+    monkeypatch.setenv("PWM_DEBUG", "1")
+
+    assert jc.get_issue("ABC-1") is None
+    captured = capsys.readouterr()
+    assert "[DEBUG] JiraClient: get_issue ABC-1 request raised exception" in captured.err

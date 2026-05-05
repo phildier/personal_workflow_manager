@@ -41,6 +41,10 @@ def test_ensure_backspace_support_sets_and_restores_erase(monkeypatch):
 
     monkeypatch.setattr(sys, "stdin", FakeStdin())
     monkeypatch.setitem(sys.modules, "termios", fake_termios)
+    monkeypatch.setattr(
+        "pwm.work.terminal.os.open",
+        lambda *args, **kwargs: (_ for _ in ()).throw(OSError()),
+    )
 
     with ensure_backspace_support():
         pass
@@ -90,6 +94,10 @@ def test_ensure_backspace_support_restores_on_exception(monkeypatch):
 
     monkeypatch.setattr(sys, "stdin", FakeStdin())
     monkeypatch.setitem(sys.modules, "termios", fake_termios)
+    monkeypatch.setattr(
+        "pwm.work.terminal.os.open",
+        lambda *args, **kwargs: (_ for _ in ()).throw(OSError()),
+    )
 
     try:
         with ensure_backspace_support():
@@ -131,6 +139,10 @@ def test_ensure_backspace_support_restores_on_keyboard_interrupt(monkeypatch):
 
     monkeypatch.setattr(sys, "stdin", FakeStdin())
     monkeypatch.setitem(sys.modules, "termios", fake_termios)
+    monkeypatch.setattr(
+        "pwm.work.terminal.os.open",
+        lambda *args, **kwargs: (_ for _ in ()).throw(OSError()),
+    )
 
     try:
         with ensure_backspace_support():
@@ -192,6 +204,10 @@ def test_ensure_backspace_support_restores_on_signal(monkeypatch):
     monkeypatch.setattr(sys, "stdin", FakeStdin())
     monkeypatch.setitem(sys.modules, "termios", fake_termios)
     monkeypatch.setitem(sys.modules, "signal", fake_signal_module)
+    monkeypatch.setattr(
+        "pwm.work.terminal.os.open",
+        lambda *args, **kwargs: (_ for _ in ()).throw(OSError()),
+    )
     monkeypatch.setattr(
         "pwm.work.terminal.os.kill", lambda pid, sig: kill_calls.append((pid, sig))
     )

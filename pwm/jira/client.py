@@ -2,6 +2,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
+import os
+import sys
 import httpx
 
 
@@ -10,6 +12,11 @@ class JiraClient:
     base_url: str
     email: str
     token: str
+
+    def _debug(self, message: str) -> None:
+        """Emit debug diagnostics when PWM_DEBUG is enabled."""
+        if os.getenv("PWM_DEBUG") == "1":
+            print(f"[DEBUG] JiraClient: {message}", file=sys.stderr)
 
     @classmethod
     def from_config(cls, cfg: dict) -> Optional["JiraClient"]:
@@ -32,6 +39,7 @@ class JiraClient:
             with self._client() as c:
                 r = c.get(url)
         except Exception as e:
+            self._debug(f"ping network error: {type(e).__name__}")
             return False, f"network error: {e}"
         if r.status_code == 200:
             acc = r.json().get("displayName") or r.json().get(
@@ -39,8 +47,10 @@ class JiraClient:
             )
             return True, f"ok (as {acc})"
         elif r.status_code == 401:
+            self._debug("ping unauthorized (401)")
             return False, "unauthorized (bad token)"
         else:
+            self._debug(f"ping returned HTTP {r.status_code}")
             return False, f"HTTP {r.status_code}"
 
     def get_current_account_id(self) -> Optional[str]:
@@ -55,8 +65,9 @@ class JiraClient:
                 r = c.get(url)
                 if r.status_code == 200:
                     return r.json().get("accountId")
+                self._debug(f"get_current_account_id returned HTTP {r.status_code}")
         except Exception:
-            pass
+            self._debug("get_current_account_id request raised exception")
         return None
 
     def get_issue(self, key: str) -> Optional[dict]:
@@ -66,8 +77,9 @@ class JiraClient:
                 r = c.get(url)
                 if r.status_code == 200:
                     return r.json()
+                self._debug(f"get_issue {key} returned HTTP {r.status_code}")
         except Exception:
-            pass
+            self._debug(f"get_issue {key} request raised exception")
         return None
 
     def get_issue_summary(self, key: str) -> Optional[str]:
@@ -84,8 +96,9 @@ class JiraClient:
                 r = c.get(url)
                 if r.status_code == 200:
                     return r.json().get("transitions", [])
+                self._debug(f"_transitions for {key} returned HTTP {r.status_code}")
         except Exception:
-            pass
+            self._debug(f"_transitions for {key} request raised exception")
         return []
 
     def transition_by_name(self, key: str, name: str) -> bool:
@@ -96,6 +109,7 @@ class JiraClient:
                 tid = t.get("id")
                 break
         if not tid:
+            self._debug(f"transition '{name}' not found for {key}")
             return False
         url = f"{self.base_url}/rest/api/3/issue/{key}/transitions"
         try:
@@ -103,7 +117,7 @@ class JiraClient:
                 r = c.post(url, json={"transition": {"id": tid}})
                 return r.status_code in (204, 200)
         except Exception:
-            pass
+            self._debug(f"transition_by_name {key} request raised exception")
         return False
 
     def assign_issue(self, key: str, account_id: str) -> bool:
@@ -122,7 +136,7 @@ class JiraClient:
                 r = c.put(url, json={"accountId": account_id})
                 return r.status_code in (204, 200)
         except Exception:
-            pass
+            self._debug(f"assign_issue {key} request raised exception")
         return False
 
     def add_comment(self, key: str, body: str) -> bool:
@@ -140,7 +154,7 @@ class JiraClient:
                 r = c.post(url, json={"body": adf_body})
                 return r.status_code in (201, 200)
         except Exception:
-            pass
+            self._debug(f"add_comment {key} request raised exception")
         return False
 
     def add_comment_with_link(
@@ -181,7 +195,7 @@ class JiraClient:
                 r = c.post(url, json={"body": adf_body})
                 return r.status_code in (201, 200)
         except Exception:
-            pass
+            self._debug(f"add_comment_with_link {key} request raised exception")
         return False
 
     def get_issue_types(self, project_key: str) -> list[dict]:
@@ -196,6 +210,9 @@ class JiraClient:
             with self._client() as c:
                 r = c.get(url, params=params)
                 if r.status_code != 200:
+                    self._debug(
+                        f"get_issue_types for {project_key} returned HTTP {r.status_code}"
+                    )
                     return []
                 data = r.json()
                 projects = data.get("projects", [])
@@ -211,7 +228,7 @@ class JiraClient:
                     for it in issue_types
                 ]
         except Exception:
-            pass
+            self._debug(f"get_issue_types for {project_key} request raised exception")
         return []
 
     def get_create_metadata(self, project_key: str, issue_type_name: str) -> dict:
@@ -230,6 +247,10 @@ class JiraClient:
             with self._client() as c:
                 r = c.get(url, params=params)
                 if r.status_code != 200:
+                    self._debug(
+                        "get_create_metadata for "
+                        f"{project_key}/{issue_type_name} returned HTTP {r.status_code}"
+                    )
                     return {}
                 data = r.json()
                 projects = data.get("projects", [])
@@ -240,7 +261,9 @@ class JiraClient:
                     return {}
                 return issue_types[0].get("fields", {})
         except Exception:
-            pass
+            self._debug(
+                f"get_create_metadata for {project_key}/{issue_type_name} request raised exception"
+            )
         return {}
 
     def create_issue(
@@ -311,13 +334,15 @@ class JiraClient:
                     return data.get("key")
                 else:
                     # Keep logs concise and avoid leaking response bodies.
-                    import sys
-
+                    self._debug(
+                        f"create_issue for {project_key} returned HTTP {r.status_code}"
+                    )
                     print(f"[DEBUG] Jira API error {r.status_code}", file=sys.stderr)
                     return None
         except Exception as e:
-            import sys
-
+            self._debug(
+                f"create_issue for {project_key} raised {type(e).__name__}"
+            )
             print(
                 f"[DEBUG] Exception creating issue: {type(e).__name__}",
                 file=sys.stderr,
@@ -362,8 +387,9 @@ class JiraClient:
                             }
                         )
                     return result
+                self._debug(f"search_issues_by_date returned HTTP {r.status_code}")
         except Exception:
-            pass
+            self._debug("search_issues_by_date request raised exception")
 
         return []
 

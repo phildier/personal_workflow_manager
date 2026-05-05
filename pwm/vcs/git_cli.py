@@ -4,6 +4,8 @@ from datetime import datetime
 from typing import Optional
 import subprocess
 
+from pwm.vcs.remote_url import parse_repo_from_remote_url
+
 
 def _run(args: list[str], repo_root: Path, capture: bool = True):
     return subprocess.run(
@@ -44,17 +46,7 @@ def infer_github_repo_from_remote(
     r = _run(["remote", "get-url", remote], repo_root)
     if r.returncode != 0:
         return None
-    url = r.stdout.strip()
-    if url.startswith("git@") and ":" in url:
-        path = url.split(":", 1)[1]
-    elif url.startswith("http://") or url.startswith("https://"):
-        part = url.split("//", 1)[1]
-        path = "/".join(part.split("/", 1)[1:])
-    else:
-        return None
-    if path.endswith(".git"):
-        path = path[:-4]
-    return path if "/" in path else None
+    return parse_repo_from_remote_url(r.stdout.strip())
 
 
 def get_default_branch(repo_root: Path, remote: str = "origin") -> str:

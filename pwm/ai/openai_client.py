@@ -2,6 +2,8 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional, Tuple
+import os
+import sys
 import httpx
 
 DEFAULT_OPENAI_API = "https://api.openai.com/v1"
@@ -16,6 +18,11 @@ class OpenAIClient:
     model: str
     max_tokens: int
     temperature: float
+
+    def _debug(self, message: str) -> None:
+        """Emit debug diagnostics when PWM_DEBUG is enabled."""
+        if os.getenv("PWM_DEBUG") == "1":
+            print(f"[DEBUG] OpenAIClient: {message}", file=sys.stderr)
 
     @classmethod
     def from_config(cls, cfg: dict) -> Optional['OpenAIClient']:
@@ -56,13 +63,16 @@ class OpenAIClient:
             with httpx.Client(timeout=10.0) as c:
                 r = c.get(url, headers=self._headers())
         except Exception as e:
+            self._debug(f"ping network error: {type(e).__name__}")
             return False, f"network error: {e}"
 
         if r.status_code == 200:
             return True, "ok"
         elif r.status_code == 401:
+            self._debug("ping unauthorized (401)")
             return False, "unauthorized (bad API key)"
         else:
+            self._debug(f"ping returned HTTP {r.status_code}")
             return False, f"HTTP {r.status_code}"
 
     def complete(
@@ -109,7 +119,8 @@ class OpenAIClient:
                         message = choices[0].get("message", {})
                         content = message.get("content", "")
                         return content.strip() if content else None
+                self._debug(f"complete returned HTTP {r.status_code}")
         except Exception:
-            pass
+            self._debug("complete request raised exception")
 
         return None

@@ -122,7 +122,11 @@ def pr(
 @app.command("daily-summary")
 @app.command("ds")
 def daily_summary_cmd(
-    since: str = typer.Option(None, "--since", help="Start time (YYYY-MM-DD HH:MM)"),
+    since: str = typer.Option(
+        None,
+        "--since",
+        help="Start time (YYYY-MM-DD or YYYY-MM-DD HH:MM)",
+    ),
     no_ai: bool = typer.Option(False, "--no-ai", help="Skip AI-generated summary"),
     format: str = typer.Option(
         None, "--format", help="Output format: text or markdown"
@@ -136,15 +140,21 @@ def daily_summary_cmd(
     # Parse since if provided
     since_dt = None
     if since:
-        try:
-            from datetime import datetime
+        from datetime import datetime
 
+        try:
             since_dt = datetime.strptime(since, "%Y-%m-%d %H:%M")
         except ValueError:
-            from rich import print as rprint
+            try:
+                since_dt = datetime.strptime(since, "%Y-%m-%d")
+            except ValueError:
+                from rich import print as rprint
 
-            rprint("[red]Error:[/red] Invalid date format. Use: YYYY-MM-DD HH:MM")
-            raise typer.Exit(1)
+                rprint(
+                    "[red]Error:[/red] Invalid date format. "
+                    "Use: YYYY-MM-DD or YYYY-MM-DD HH:MM"
+                )
+                raise typer.Exit(1)
 
     raise SystemExit(
         daily_summary(

@@ -1,6 +1,8 @@
 from __future__ import annotations
 from pathlib import Path
 import webbrowser
+import os
+import sys
 from typing import Optional, TYPE_CHECKING
 from rich import print as rprint
 from rich.prompt import Confirm
@@ -19,6 +21,12 @@ from pwm.jira.client import JiraClient
 
 if TYPE_CHECKING:
     from pwm.ai.summarizer import SupportsCompletion
+
+
+def _debug(message: str) -> None:
+    """Emit debug diagnostics when PWM_DEBUG is enabled."""
+    if os.getenv("PWM_DEBUG") == "1":
+        print(f"[DEBUG] pr.open: {message}", file=sys.stderr)
 
 
 def display_pr_info(
@@ -200,12 +208,14 @@ def open_pr(open_browser: bool = True, use_ai: bool = True) -> int:
     # Get current branch
     branch = current_branch(repo_root)
     if not branch:
+        _debug("current_branch returned no branch")
         rprint("[red]Error: Not on a git branch[/red]")
         return 1
 
     # Check if we're in "work start" mode (branch has issue key)
     issue_key = extract_issue_key_from_branch(branch)
     if not issue_key:
+        _debug(f"branch '{branch}' does not contain Jira issue key")
         rprint(f"[yellow]Branch '{branch}' doesn't contain a Jira issue key.[/yellow]")
         rprint("[cyan]Start work on an issue first:[/cyan]")
         rprint("  pwm work-start ABC-123")
@@ -215,6 +225,7 @@ def open_pr(open_browser: bool = True, use_ai: bool = True) -> int:
     # Get GitHub repo
     github_repo = ctx.github_repo
     if not github_repo:
+        _debug("context has no github_repo configured")
         rprint("[red]Error: GitHub repo not configured.[/red]")
         rprint("[cyan]Run 'pwm init' to configure your project.[/cyan]")
         return 1
@@ -222,6 +233,7 @@ def open_pr(open_browser: bool = True, use_ai: bool = True) -> int:
     # Get GitHub client
     github = GitHubClient.from_config(ctx.config)
     if not github:
+        _debug("GitHubClient.from_config returned None")
         rprint("[red]Error: GitHub not configured.[/red]")
         rprint(
             "[cyan]Set GITHUB_TOKEN or PWM_GITHUB_TOKEN environment variable.[/cyan]"
@@ -259,6 +271,7 @@ def open_pr(open_browser: bool = True, use_ai: bool = True) -> int:
     # Get commits
     commits = get_commits_since_base(repo_root, base_branch_ref, remote)
     if not commits:
+        _debug("no commits found since base branch")
         rprint("[yellow]Warning: No commits found on this branch.[/yellow]")
         create_anyway = Confirm.ask("Create PR anyway?", default=False)
         if not create_anyway:
@@ -272,6 +285,7 @@ def open_pr(open_browser: bool = True, use_ai: bool = True) -> int:
     # Ensure branch is pushed
     rprint(f"[cyan]Pushing branch '{branch}' to remote...[/cyan]")
     if not push_branch(repo_root, branch, remote):
+        _debug(f"push_branch failed for {remote}/{branch}")
         rprint("[red]Error: Failed to push branch to remote.[/red]")
         return 1
 
@@ -325,6 +339,7 @@ def open_pr(open_browser: bool = True, use_ai: bool = True) -> int:
     )
 
     if not pr:
+        _debug("github.create_pr returned None")
         rprint("[red]Error: Failed to create PR.[/red]")
         rprint("[dim]Check that your GitHub token has the 'repo' scope.[/dim]")
         return 1

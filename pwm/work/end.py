@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 from datetime import datetime
+import os
+import sys
 from rich import print as rprint
 
 from pwm.context.resolver import resolve_context
@@ -10,6 +12,12 @@ from pwm.vcs.git_cli import current_branch, get_commits_since_base
 from pwm.github.client import GitHubClient
 from pwm.jira.client import JiraClient
 from pwm.prompt.command import extract_issue_key_from_branch
+
+
+def _debug(message: str) -> None:
+    """Emit debug diagnostics when PWM_DEBUG is enabled."""
+    if os.getenv("PWM_DEBUG") == "1":
+        print(f"[DEBUG] work.end: {message}", file=sys.stderr)
 
 
 def get_commits_since_timestamp(
@@ -79,12 +87,14 @@ def work_end(
     # Get current branch
     branch = current_branch(repo_root)
     if not branch:
+        _debug("current_branch returned no branch")
         rprint("[red]Error: Not on a git branch[/red]")
         return 1
 
     # Check if we're in "work start" mode
     issue_key = extract_issue_key_from_branch(branch)
     if not issue_key:
+        _debug(f"branch '{branch}' does not contain Jira issue key")
         rprint(f"[yellow]Error: Branch '{branch}' doesn't contain a Jira issue key.[/yellow]")
         rprint("[cyan]Start work on an issue first:[/cyan]")
         rprint("  pwm work-start ABC-123")
@@ -93,6 +103,7 @@ def work_end(
     # Get GitHub repo
     github_repo = ctx.github_repo
     if not github_repo:
+        _debug("context has no github_repo configured")
         rprint("[red]Error: GitHub repo not configured.[/red]")
         rprint("[cyan]Run 'pwm init' to configure your project.[/cyan]")
         return 1
@@ -100,6 +111,7 @@ def work_end(
     # Get GitHub client
     github = GitHubClient.from_config(ctx.config)
     if not github:
+        _debug("GitHubClient.from_config returned None")
         rprint("[red]Error: GitHub not configured.[/red]")
         rprint("[cyan]Set GITHUB_TOKEN or PWM_GITHUB_TOKEN environment variable.[/cyan]")
         return 1
@@ -107,6 +119,7 @@ def work_end(
     # Check if PR exists (check both open and closed)
     pr = github.get_pr_for_branch(github_repo, branch, state="all")
     if not pr:
+        _debug(f"no PR found for branch '{branch}' in {github_repo}")
         rprint(f"[yellow]Error: No pull request found for branch '{branch}'.[/yellow]")
         rprint("[cyan]Create a PR first:[/cyan]")
         rprint("  pwm pr")
@@ -130,6 +143,7 @@ def work_end(
     commits = get_commits_since_base(repo_root, remote=remote, since=last_comment_time)
 
     if not commits:
+        _debug("no commits found since last tracked timestamp")
         if last_comment_time:
             rprint("[yellow]No new commits since last update.[/yellow]")
         else:
@@ -154,6 +168,7 @@ def work_end(
             pr_commented = True
             rprint("[green]✓ Commented on PR[/green]")
         else:
+            _debug(f"failed to add PR comment to #{pr_number}")
             rprint("[yellow]⚠ Failed to comment on PR[/yellow]")
 
     # Comment on Jira
@@ -173,8 +188,10 @@ def work_end(
                 jira_commented = True
                 rprint("[green]✓ Commented on Jira[/green]")
             else:
+                _debug(f"failed to add Jira comment to {issue_key}")
                 rprint("[yellow]⚠ Failed to comment on Jira[/yellow]")
         else:
+            _debug("JiraClient.from_config returned None; skipping Jira comment")
             rprint("[dim]Skipping Jira comment (not configured)[/dim]")
 
     # Request reviewers if requested
@@ -193,8 +210,10 @@ def work_end(
                 if team_reviewers:
                     rprint(f"[green]✓ Requested team reviewers: {', '.join(team_reviewers)}[/green]")
             else:
+                _debug(f"failed to request reviewers for PR #{pr_number}")
                 rprint("[yellow]⚠ Failed to request reviewers[/yellow]")
         else:
+            _debug("request_review enabled but no reviewers configured")
             rprint("[yellow]No reviewers configured in .pwm.toml[/yellow]")
             rprint("[dim]Add [github.pr_defaults] section with reviewers/team_reviewers[/dim]")
 

@@ -5,12 +5,8 @@ from pathlib import Path
 import subprocess
 
 from pwm.config.loader import load_merged_config
-
-@dataclass
-class ContextMeta:
-    user_config_path: Path | None
-    project_config_path: Path | None
-    source_summary: str
+from pwm.context.types import ContextMeta
+from pwm.vcs.remote_url import parse_repo_from_remote_url
 
 @dataclass
 class Context:
@@ -48,16 +44,7 @@ def infer_github_repo(repo_root: Path, config: dict) -> str | None:
         url = subprocess.check_output(["git", "-C", str(repo_root), "remote", "get-url", config.get("git", {}).get("default_remote", "origin")], text=True).strip()
     except subprocess.CalledProcessError:
         return None
-    if url.startswith("git@") and ":" in url:
-        path = url.split(":", 1)[1]
-    elif url.startswith("http://") or url.startswith("https://"):
-        part = url.split("//", 1)[1]
-        path = "/".join(part.split("/", 1)[1:])
-    else:
-        return None
-    if path.endswith(".git"):
-        path = path[:-4]
-    return path if "/" in path else None
+    return parse_repo_from_remote_url(url)
 
 def slugify(s: str) -> str:
     import re
