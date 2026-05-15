@@ -77,3 +77,111 @@ def test_daily_summary_since_invalid_format_shows_error(monkeypatch):
     assert result.exit_code == 1
     assert "Invalid date format" in result.stdout
     assert "YYYY-MM-DD or YYYY-MM-DD HH:MM" in result.stdout
+
+
+def test_ws_non_interactive_new_passes_args(monkeypatch):
+    captured = {}
+    logged = []
+
+    def fake_work_start(**kwargs):
+        nonlocal captured
+        captured = kwargs
+        return 0
+
+    monkeypatch.setattr("pwm.cli.work_start", fake_work_start)
+    monkeypatch.setattr(
+        "pwm.cli.append_event",
+        lambda command, args, details: logged.append(
+            {"command": command, "args": args, "details": details}
+        ),
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "ws",
+            "--new",
+            "--non-interactive",
+            "--summary",
+            "CLI created issue",
+            "--description",
+            "Desc",
+            "--issue-type",
+            "Task",
+            "--labels",
+            "backend,api",
+            "--story-points",
+            "5",
+            "--custom-field",
+            "customfield_123=value",
+            "--save-defaults",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured["create_new"] is True
+    assert captured["non_interactive"] is True
+    assert captured["summary"] == "CLI created issue"
+    assert captured["description"] == "Desc"
+    assert captured["issue_type"] == "Task"
+    assert captured["labels"] == ["backend", "api"]
+    assert captured["story_points"] == 5.0
+    assert captured["custom_fields"] == {"customfield_123": "value"}
+    assert captured["save_defaults"] is True
+    assert logged
+    assert logged[0]["command"] == "ws"
+    assert logged[0]["details"]["status"] == "success"
+
+
+def test_ws_rejects_conflicting_save_default_flags(monkeypatch):
+    monkeypatch.setattr("pwm.cli.work_start", lambda **kwargs: 0)
+
+    result = runner.invoke(
+        app,
+        ["ws", "--new", "--save-defaults", "--no-save-defaults"],
+    )
+
+    assert result.exit_code == 2
+
+
+def test_pr_passes_non_interactive_flags(monkeypatch):
+    captured = {}
+    logged = []
+
+    def fake_open_pr(**kwargs):
+        nonlocal captured
+        captured = kwargs
+        return 0
+
+    monkeypatch.setattr("pwm.cli.open_pr", fake_open_pr)
+    monkeypatch.setattr(
+        "pwm.cli.append_event",
+        lambda command, args, details: logged.append(
+            {"command": command, "args": args, "details": details}
+        ),
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "pr",
+            "--no-ai",
+            "--create-anyway",
+            "--no-open-browser",
+            "--title",
+            "Manual title",
+            "--body",
+            "Manual body",
+            "--non-interactive",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured["use_ai"] is False
+    assert captured["create_anyway"] is True
+    assert captured["open_browser"] is False
+    assert captured["title_override"] == "Manual title"
+    assert captured["body_override"] == "Manual body"
+    assert captured["non_interactive"] is True
+    assert logged
+    assert logged[0]["command"] == "pr"

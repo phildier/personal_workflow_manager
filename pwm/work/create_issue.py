@@ -1,4 +1,5 @@
 from __future__ import annotations
+import json
 from pathlib import Path
 from typing import Optional
 from rich.prompt import Prompt, Confirm
@@ -6,6 +7,114 @@ from rich import print as rprint
 
 from pwm.jira.client import JiraClient
 from pwm.work.terminal import ensure_backspace_support
+
+
+STANDARD_CREATE_FIELDS = {
+    "summary",
+    "description",
+    "issuetype",
+    "project",
+    "labels",
+}
+
+
+def build_non_interactive_issue_details(
+    jira: JiraClient,
+    project_key: str,
+    config: dict,
+    summary: str,
+    description: Optional[str] = None,
+    issue_type: Optional[str] = None,
+    labels: Optional[list[str]] = None,
+    story_points: Optional[float] = None,
+    custom_fields: Optional[dict] = None,
+) -> Optional[dict]:
+    """Build issue details without interactive prompts."""
+    defaults = config.get("jira", {}).get("issue_defaults", {})
+    resolved_issue_type = issue_type or defaults.get("issue_type", "Story")
+    resolved_labels = labels if labels is not None else defaults.get("labels", [])
+
+    default_custom_fields = defaults.get("custom_fields", {})
+    resolved_custom_fields = dict(default_custom_fields)
+    if custom_fields:
+        resolved_custom_fields.update(custom_fields)
+
+    metadata = jira.get_create_metadata(project_key, resolved_issue_type)
+
+    # Map story points into the proper custom field if available.
+    if story_points is not None and metadata:
+        story_points_field_id = None
+        for field_id, field_info in metadata.items():
+            field_name = field_info.get("name", "")
+            field_schema = field_info.get("schema", {})
+            field_type = field_schema.get("type", "")
+            if field_type == "number" and field_name.lower() in {
+                "story points",
+                "storypoints",
+                "story point estimate",
+            }:
+                story_points_field_id = field_id
+                break
+
+        if story_points_field_id:
+            resolved_custom_fields[story_points_field_id] = story_points
+        else:
+            rprint(
+                "[yellow]Warning: Story points field not found in Jira metadata; "
+                "ignoring --story-points.[/yellow]"
+            )
+
+    missing_required_fields: list[str] = []
+    for field_id, field_info in metadata.items():
+        if field_id in STANDARD_CREATE_FIELDS:
+            continue
+        if not field_info.get("required", False):
+            continue
+        if field_id not in resolved_custom_fields:
+            field_name = field_info.get("name", field_id)
+            missing_required_fields.append(field_name)
+
+    if missing_required_fields:
+        joined = ", ".join(sorted(missing_required_fields))
+        rprint(
+            "[red]Error: Missing required Jira fields for non-interactive "
+            f"issue creation: {joined}[/red]"
+        )
+        return None
+
+    return {
+        "summary": summary,
+        "description": description or None,
+        "issue_type": resolved_issue_type,
+        "labels": resolved_labels,
+        "custom_fields": resolved_custom_fields,
+    }
+
+
+def parse_custom_field_values(custom_field_pairs: Optional[list[str]]) -> dict:
+    """Parse repeated --custom-field KEY=VALUE options into a dict."""
+    parsed: dict = {}
+    for pair in custom_field_pairs or []:
+        if "=" not in pair:
+            raise ValueError(
+                f"Invalid --custom-field '{pair}'. Expected KEY=VALUE format."
+            )
+        key, value = pair.split("=", 1)
+        key = key.strip()
+        if not key:
+            raise ValueError("Invalid --custom-field with empty key.")
+
+        raw = value.strip()
+        if not raw:
+            parsed[key] = ""
+            continue
+
+        try:
+            parsed[key] = json.loads(raw)
+        except json.JSONDecodeError:
+            parsed[key] = raw
+
+    return parsed
 
 
 def prompt_for_issue_details(
@@ -291,7 +400,19 @@ def save_issue_defaults(
 
 
 def create_new_issue(
-    jira: JiraClient, project_key: str, repo_root: Path, config: dict
+    jira: JiraClient,
+    project_key: str,
+    repo_root: Path,
+    config: dict,
+    *,
+    non_interactive: bool = False,
+    summary: Optional[str] = None,
+    description: Optional[str] = None,
+    issue_type: Optional[str] = None,
+    labels: Optional[list[str]] = None,
+    story_points: Optional[float] = None,
+    custom_fields: Optional[dict] = None,
+    save_defaults: Optional[bool] = None,
 ) -> Optional[str]:
     """
     Create a new Jira issue interactively.
@@ -304,10 +425,34 @@ def create_new_issue(
     default_labels = defaults.get("labels", [])
     default_custom_fields = defaults.get("custom_fields", {})
 
-    # Prompt for details
-    details = prompt_for_issue_details(
-        jira, project_key, default_issue_type, default_labels, default_custom_fields
-    )
+    if non_interactive:
+        if not summary:
+            rprint(
+                "[red]Error: --summary is required when using "
+                "--non-interactive with --new.[/red]"
+            )
+            return None
+        details = build_non_interactive_issue_details(
+            jira=jira,
+            project_key=project_key,
+            config=config,
+            summary=summary,
+            description=description,
+            issue_type=issue_type,
+            labels=labels,
+            story_points=story_points,
+            custom_fields=custom_fields,
+        )
+    else:
+        # Prompt for details
+        details = prompt_for_issue_details(
+            jira,
+            project_key,
+            default_issue_type,
+            default_labels,
+            default_custom_fields,
+        )
+
     if not details:
         return None
 
@@ -357,13 +502,17 @@ def create_new_issue(
                 custom_fields_to_save[field_id] = value
 
     if should_save:
-        prompt_text = (
-            "Save issue type, labels, and custom fields as defaults?"
-            if custom_fields_to_save
-            else "Save issue type and labels as defaults?"
-        )
-        save_defaults = Confirm.ask(prompt_text, default=True)
-        if save_defaults:
+        if save_defaults is None:
+            prompt_text = (
+                "Save issue type, labels, and custom fields as defaults?"
+                if custom_fields_to_save
+                else "Save issue type and labels as defaults?"
+            )
+            resolved_save_defaults = Confirm.ask(prompt_text, default=True)
+        else:
+            resolved_save_defaults = save_defaults
+
+        if resolved_save_defaults:
             save_issue_defaults(
                 repo_root,
                 details["issue_type"],

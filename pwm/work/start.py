@@ -14,7 +14,16 @@ def work_start(
     issue_key: Optional[str] = None,
     create_new: bool = False,
     transition: bool = True,
-    comment: bool = True
+    comment: bool = True,
+    non_interactive: bool = False,
+    summary: Optional[str] = None,
+    description: Optional[str] = None,
+    issue_type: Optional[str] = None,
+    labels: Optional[list[str]] = None,
+    story_points: Optional[float] = None,
+    custom_fields: Optional[dict] = None,
+    save_defaults: Optional[bool] = None,
+    event_details: Optional[dict] = None,
 ) -> int:
     ctx = resolve_context()
     repo_root = ctx.repo_root
@@ -22,10 +31,14 @@ def work_start(
     # Validate inputs
     if create_new and issue_key:
         rprint("[red]Error: Cannot specify both --new and an issue key[/red]")
+        if event_details is not None:
+            event_details["error"] = "Cannot specify both --new and issue_key"
         return 1
 
     if not create_new and not issue_key:
         rprint("[red]Error: Must specify either an issue key or --new flag[/red]")
+        if event_details is not None:
+            event_details["error"] = "Must specify issue_key or --new"
         return 1
 
     jira = JiraClient.from_config(ctx.config)
@@ -34,16 +47,35 @@ def work_start(
     if create_new:
         if not jira:
             rprint("[red]Error: Jira not configured. Run 'pwm init' or set Jira environment variables.[/red]")
+            if event_details is not None:
+                event_details["error"] = "Jira not configured for --new"
             return 1
 
         project_key = ctx.jira_project_key
         if not project_key:
             rprint("[red]Error: No Jira project configured. Run 'pwm init' to set project key.[/red]")
+            if event_details is not None:
+                event_details["error"] = "No Jira project key configured"
             return 1
 
-        issue_key = create_new_issue(jira, project_key, repo_root, ctx.config)
+        issue_key = create_new_issue(
+            jira,
+            project_key,
+            repo_root,
+            ctx.config,
+            non_interactive=non_interactive,
+            summary=summary,
+            description=description,
+            issue_type=issue_type,
+            labels=labels,
+            story_points=story_points,
+            custom_fields=custom_fields,
+            save_defaults=save_defaults,
+        )
         if not issue_key:
             rprint("[yellow]Issue creation cancelled or failed.[/yellow]")
+            if event_details is not None:
+                event_details["error"] = "Issue creation cancelled or failed"
             return 1
 
     # Get issue summary for branch naming
@@ -70,6 +102,7 @@ def work_start(
     transitioned = False
     commented = False
     assigned = False
+    repo_name = ctx.github_repo or repo_root.name
     if jira:
         # Assign issue to current user
         account_id = jira.get_current_account_id()
@@ -78,7 +111,10 @@ def work_start(
         if transition:
             transitioned = jira.transition_by_name(issue_key, "In Progress") or False
         if comment:
-            commented = jira.add_comment(issue_key, f"Started work on branch `{branch_name}`") or False
+            comment_text = (
+                f"Started work on branch `{branch_name}` in repo `{repo_name}`"
+            )
+            commented = jira.add_comment(issue_key, comment_text) or False
 
     table = Table(title="pwm work start")
     table.add_column("Action", style="bold cyan")
@@ -91,5 +127,14 @@ def work_start(
     table.add_row("Jira transitioned -> In Progress", ("yes" if transitioned else "no") if jira else "<skipped>")
     table.add_row("Jira comment added", ("yes" if commented else "no") if jira else "<skipped>")
     rprint(table)
+
+    if event_details is not None:
+        event_details["issue_key"] = issue_key
+        event_details["branch_name"] = branch_name
+        event_details["repo_root"] = str(repo_root)
+        event_details["github_repo"] = ctx.github_repo
+        event_details["jira_assigned"] = assigned if jira else None
+        event_details["jira_transitioned"] = transitioned if jira else None
+        event_details["jira_commented"] = commented if jira else None
 
     return 0

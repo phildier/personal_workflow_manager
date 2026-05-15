@@ -13,6 +13,7 @@ It automatically detects project context, helps create and manage branches tied 
 - Config initialization: `pwm init` scaffolds `.pwm.toml` with inferred defaults (for example, the GitHub repo).
 - Work start automation: `pwm work-start <ISSUE>` creates or switches to a branch, optionally transitions the Jira issue to In Progress, and adds a Jira comment. Use `--new` to create a new Jira issue first.
 - Pull request automation: `pwm pr` creates or opens pull requests with auto-generated title and description from commits and Jira context.
+- Command event log: `ws` and `pr` append JSONL events to `~/.config/pwm/log.jsonl` (with size-based rotation) for repo/branch traceability.
 - Status updates: `pwm work-end` posts concise summaries to PR and Jira with recent changes, optionally requesting reviewers.
 - Daily work summaries: `pwm daily-summary` generates comprehensive reports of PRs and Jira issues from the previous business day, with optional AI summaries and org-wide search.
 - AI-powered PR descriptions (optional): OpenAI integration generates intelligent summaries for pull request descriptions. Use `--no-ai` to skip. Fully optional with graceful fallback when not configured.
@@ -97,7 +98,7 @@ Initialize a `.pwm.toml` for the current repository. Prompts for Jira project ke
 ### pwm work-start [ISSUE] (alias: ws)
 Start work on a Jira issue: create or switch branches and update Jira.
 
-**Create a new issue:**
+**Create a new issue (interactive):**
 ```
 pwm work-start --new
 ```
@@ -110,6 +111,22 @@ Interactively creates a new Jira issue, then creates a branch and starts work. P
 - Any required custom fields returned by your Jira instance (e.g., "Responsible Team")
 
 After creating the issue, you'll be asked if you want to save the issue type, labels, and custom fields as defaults for future issues. These defaults are saved to `.pwm.toml` and will be pre-filled the next time you create an issue.
+
+**Create a new issue (non-interactive):**
+```
+pwm work-start --new --non-interactive --summary "Implement X"
+pwm ws --new --non-interactive --summary "Implement X" --issue-type Task --labels backend,api --story-points 5 --custom-field customfield_10370='{"value":"Platform Team"}' --save-defaults
+```
+
+**Non-interactive options:**
+- `--non-interactive`: Fail instead of prompting for missing values
+- `--summary`: Required for non-interactive `--new`
+- `--description`: Optional issue description
+- `--issue-type`: Override issue type (defaults from `.pwm.toml`)
+- `--labels`: Comma-separated labels (defaults from `.pwm.toml`)
+- `--story-points`: Numeric story points
+- `--custom-field KEY=VALUE`: Repeatable custom field values (VALUE may be JSON)
+- `--save-defaults` / `--no-save-defaults`: Control default persistence without prompts
 
 Note: `--new` requires Jira to be configured. See Configuration section above.
 
@@ -138,6 +155,11 @@ If you're on a branch with a Jira issue key:
 
 **Options:**
 - `--no-ai`: Skip AI-generated summaries even when OpenAI is configured
+- `--create-anyway` / `-y`: Create PR even when no commits are detected
+- `--no-open-browser`: Do not open the PR URL in a browser
+- `--title`: Override generated PR title
+- `--body`: Override generated PR description
+- `--non-interactive`: Fail instead of prompting for confirmation
 
 **AI integration:**
 - When OpenAI is configured, automatically generates two intelligent summaries:
@@ -155,6 +177,8 @@ If you're on a branch with a Jira issue key:
 ```
 pwm pr
 pwm pr --no-ai
+pwm pr --non-interactive --create-anyway --no-open-browser
+pwm pr --title "[ABC-123] Manual title" --body "Manual description"
 ```
 
 ### pwm work-end (alias: we)

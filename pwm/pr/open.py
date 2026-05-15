@@ -187,7 +187,15 @@ def generate_pr_description(
     return "\n".join(lines)
 
 
-def open_pr(open_browser: bool = True, use_ai: bool = True) -> int:
+def open_pr(
+    open_browser: bool = True,
+    use_ai: bool = True,
+    create_anyway: bool = False,
+    title_override: Optional[str] = None,
+    body_override: Optional[str] = None,
+    non_interactive: bool = False,
+    event_details: Optional[dict] = None,
+) -> int:
     """
     Open a pull request for the current branch.
 
@@ -204,13 +212,20 @@ def open_pr(open_browser: bool = True, use_ai: bool = True) -> int:
     """
     ctx = resolve_context()
     repo_root = ctx.repo_root
+    if event_details is not None:
+        event_details["repo_root"] = str(repo_root)
+        event_details["github_repo"] = ctx.github_repo
 
     # Get current branch
     branch = current_branch(repo_root)
     if not branch:
         _debug("current_branch returned no branch")
         rprint("[red]Error: Not on a git branch[/red]")
+        if event_details is not None:
+            event_details["error"] = "Not on a git branch"
         return 1
+    if event_details is not None:
+        event_details["branch"] = branch
 
     # Check if we're in "work start" mode (branch has issue key)
     issue_key = extract_issue_key_from_branch(branch)
@@ -220,7 +235,11 @@ def open_pr(open_browser: bool = True, use_ai: bool = True) -> int:
         rprint("[cyan]Start work on an issue first:[/cyan]")
         rprint("  pwm work-start ABC-123")
         rprint("  pwm work-start --new")
+        if event_details is not None:
+            event_details["error"] = "Branch does not contain Jira issue key"
         return 1
+    if event_details is not None:
+        event_details["issue_key"] = issue_key
 
     # Get GitHub repo
     github_repo = ctx.github_repo
@@ -228,6 +247,8 @@ def open_pr(open_browser: bool = True, use_ai: bool = True) -> int:
         _debug("context has no github_repo configured")
         rprint("[red]Error: GitHub repo not configured.[/red]")
         rprint("[cyan]Run 'pwm init' to configure your project.[/cyan]")
+        if event_details is not None:
+            event_details["error"] = "GitHub repo not configured"
         return 1
 
     # Get GitHub client
@@ -238,6 +259,8 @@ def open_pr(open_browser: bool = True, use_ai: bool = True) -> int:
         rprint(
             "[cyan]Set GITHUB_TOKEN or PWM_GITHUB_TOKEN environment variable.[/cyan]"
         )
+        if event_details is not None:
+            event_details["error"] = "GitHub not configured"
         return 1
 
     # Check if PR already exists
@@ -249,6 +272,10 @@ def open_pr(open_browser: bool = True, use_ai: bool = True) -> int:
 
         display_pr_info(github, github_repo, pr_number, pr_title, pr_url)
 
+        if event_details is not None:
+            event_details["pr_number"] = pr_number
+            event_details["pr_url"] = pr_url
+            event_details["existing_pr"] = True
         if open_browser:
             webbrowser.open(pr_url)
             rprint("[cyan]Opened in browser[/cyan]")
@@ -257,6 +284,8 @@ def open_pr(open_browser: bool = True, use_ai: bool = True) -> int:
 
     # No existing PR - create one
     rprint(f"[cyan]No PR exists for branch '{branch}'[/cyan]")
+    if event_details is not None:
+        event_details["existing_pr"] = False
 
     # Get configured remote
     remote = ctx.config.get("git", {}).get("default_remote", "origin")
@@ -270,10 +299,23 @@ def open_pr(open_browser: bool = True, use_ai: bool = True) -> int:
 
     # Get commits
     commits = get_commits_since_base(repo_root, base_branch_ref, remote)
+    if event_details is not None:
+        event_details["commit_count"] = len(commits)
     if not commits:
         _debug("no commits found since base branch")
         rprint("[yellow]Warning: No commits found on this branch.[/yellow]")
-        create_anyway = Confirm.ask("Create PR anyway?", default=False)
+        if create_anyway:
+            pass
+        elif non_interactive:
+            rprint(
+                "[red]Error: No commits found and non-interactive mode is set. "
+                "Use --create-anyway to proceed.[/red]"
+            )
+            if event_details is not None:
+                event_details["error"] = "No commits found"
+            return 1
+        else:
+            create_anyway = Confirm.ask("Create PR anyway?", default=False)
         if not create_anyway:
             return 1
 
@@ -287,6 +329,8 @@ def open_pr(open_browser: bool = True, use_ai: bool = True) -> int:
     if not push_branch(repo_root, branch, remote):
         _debug(f"push_branch failed for {remote}/{branch}")
         rprint("[red]Error: Failed to push branch to remote.[/red]")
+        if event_details is not None:
+            event_details["error"] = "Failed to push branch"
         return 1
 
     # Get Jira client for enhanced title/description
@@ -306,8 +350,8 @@ def open_pr(open_browser: bool = True, use_ai: bool = True) -> int:
         diff_summary = summarize_diff_for_pr(diff, openai)
 
     # Generate title and description
-    title = generate_pr_title(issue_key, jira, commits)
-    description = generate_pr_description(
+    title = title_override or generate_pr_title(issue_key, jira, commits)
+    description = body_override or generate_pr_description(
         issue_key,
         commits,
         jira,
@@ -342,10 +386,16 @@ def open_pr(open_browser: bool = True, use_ai: bool = True) -> int:
         _debug("github.create_pr returned None")
         rprint("[red]Error: Failed to create PR.[/red]")
         rprint("[dim]Check that your GitHub token has the 'repo' scope.[/dim]")
+        if event_details is not None:
+            event_details["error"] = "Failed to create PR"
         return 1
 
     pr_number = pr["number"]
     pr_url = pr["html_url"]
+    if event_details is not None:
+        event_details["pr_number"] = pr_number
+        event_details["pr_url"] = pr_url
+        event_details["pr_title"] = title
 
     display_pr_info(github, github_repo, pr_number, title, pr_url)
 

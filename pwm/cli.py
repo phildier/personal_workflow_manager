@@ -1,13 +1,17 @@
 import typer
+from typing import Optional
+from time import perf_counter
 
 from pwm.context.command import show_context
 from pwm.setup.init import init_project
 from pwm.prompt.command import prompt_command, PromptFormat
 from pwm.work.start import work_start
+from pwm.work.create_issue import parse_custom_field_values
 from pwm.work.end import work_end
 from pwm.check.self_check import self_check
 from pwm.pr.open import open_pr
 from pwm.summary.command import daily_summary
+from pwm.log.events import append_event
 
 app = typer.Typer(help="Personal Workflow Manager")
 
@@ -44,20 +48,153 @@ def work_start_cmd(
     ),
     no_transition: bool = typer.Option(False, help="Do not transition Jira issue"),
     no_comment: bool = typer.Option(False, help="Do not add Jira comment"),
+    non_interactive: bool = typer.Option(
+        False,
+        "--non-interactive",
+        help="Fail instead of prompting for missing values when using --new",
+    ),
+    summary: Optional[str] = typer.Option(
+        None,
+        "--summary",
+        help="Jira summary for --new (required with --non-interactive)",
+    ),
+    description: Optional[str] = typer.Option(
+        None,
+        "--description",
+        help="Jira description for --new",
+    ),
+    issue_type: Optional[str] = typer.Option(
+        None,
+        "--issue-type",
+        help="Jira issue type for --new (for example: Story, Task, Bug)",
+    ),
+    labels: Optional[str] = typer.Option(
+        None,
+        "--labels",
+        help="Comma-separated labels for --new",
+    ),
+    story_points: Optional[float] = typer.Option(
+        None,
+        "--story-points",
+        help="Story points for --new",
+    ),
+    custom_field: list[str] = typer.Option(
+        None,
+        "--custom-field",
+        help="Repeatable KEY=VALUE pairs for Jira custom fields",
+    ),
+    save_defaults: bool = typer.Option(
+        False,
+        "--save-defaults",
+        help="Save provided issue values as defaults after creation",
+    ),
+    no_save_defaults: bool = typer.Option(
+        False,
+        "--no-save-defaults",
+        help="Do not save issue values as defaults after creation",
+    ),
 ):
     """Start work on a Jira issue: create or switch branch and optionally update Jira."""
+    started_at = perf_counter()
     if not issue_key and not new:
+        append_event(
+            command="ws",
+            args={
+                "issue_key": issue_key,
+                "new": new,
+                "non_interactive": non_interactive,
+            },
+            details={
+                "status": "success",
+                "exit_code": 0,
+                "note": "Displayed command help",
+            },
+        )
         typer.echo(ctx.get_help())
         raise typer.Exit(0)
 
-    raise SystemExit(
-        work_start(
-            issue_key=issue_key,
-            create_new=new,
-            transition=not no_transition,
-            comment=not no_comment,
+    if save_defaults and no_save_defaults:
+        append_event(
+            command="ws",
+            args={"new": new},
+            details={
+                "status": "error",
+                "exit_code": 2,
+                "error": "Conflicting save-default flags",
+            },
         )
+        raise typer.BadParameter(
+            "Cannot use both --save-defaults and --no-save-defaults"
+        )
+
+    parsed_labels = None
+    if labels is not None:
+        parsed_labels = [label.strip() for label in labels.split(",") if label.strip()]
+
+    parsed_custom_fields = None
+    if custom_field:
+        try:
+            parsed_custom_fields = parse_custom_field_values(custom_field)
+        except ValueError as exc:
+            append_event(
+                command="ws",
+                args={"new": new, "custom_field": custom_field},
+                details={
+                    "status": "error",
+                    "exit_code": 2,
+                    "error": str(exc),
+                },
+            )
+            raise typer.BadParameter(str(exc)) from exc
+
+    resolved_save_defaults = None
+    if save_defaults:
+        resolved_save_defaults = True
+    elif no_save_defaults:
+        resolved_save_defaults = False
+
+    run_details: dict = {}
+    exit_code = work_start(
+        issue_key=issue_key,
+        create_new=new,
+        transition=not no_transition,
+        comment=not no_comment,
+        non_interactive=non_interactive,
+        summary=summary,
+        description=description,
+        issue_type=issue_type,
+        labels=parsed_labels,
+        story_points=story_points,
+        custom_fields=parsed_custom_fields,
+        save_defaults=resolved_save_defaults,
+        event_details=run_details,
     )
+
+    duration_ms = int((perf_counter() - started_at) * 1000)
+    append_event(
+        command="ws",
+        args={
+            "issue_key": issue_key,
+            "new": new,
+            "no_transition": no_transition,
+            "no_comment": no_comment,
+            "non_interactive": non_interactive,
+            "summary": summary,
+            "description": description,
+            "issue_type": issue_type,
+            "labels": parsed_labels,
+            "story_points": story_points,
+            "custom_fields": parsed_custom_fields,
+            "save_defaults": resolved_save_defaults,
+        },
+        details={
+            "status": "success" if exit_code == 0 else "error",
+            "exit_code": exit_code,
+            "duration_ms": duration_ms,
+            **run_details,
+        },
+    )
+    raise SystemExit(exit_code)
 
 
 @app.command("work-end")
@@ -114,9 +251,56 @@ def prompt(
 @app.command()
 def pr(
     no_ai: bool = typer.Option(False, "--no-ai", help="Skip AI-generated summary"),
+    create_anyway: bool = typer.Option(
+        False,
+        "--create-anyway",
+        "-y",
+        help="Create PR even when no commits are detected",
+    ),
+    no_open_browser: bool = typer.Option(
+        False,
+        "--no-open-browser",
+        help="Do not open PR URL in a browser",
+    ),
+    title: Optional[str] = typer.Option(None, "--title", help="Override PR title"),
+    body: Optional[str] = typer.Option(None, "--body", help="Override PR body"),
+    non_interactive: bool = typer.Option(
+        False,
+        "--non-interactive",
+        help="Fail instead of prompting for confirmation",
+    ),
 ) -> None:
     """Open or create a pull request for the current branch."""
-    raise SystemExit(open_pr(use_ai=not no_ai))
+    started_at = perf_counter()
+    run_details: dict = {}
+    exit_code = open_pr(
+        use_ai=not no_ai,
+        create_anyway=create_anyway,
+        open_browser=not no_open_browser,
+        title_override=title,
+        body_override=body,
+        non_interactive=non_interactive,
+        event_details=run_details,
+    )
+    duration_ms = int((perf_counter() - started_at) * 1000)
+    append_event(
+        command="pr",
+        args={
+            "no_ai": no_ai,
+            "create_anyway": create_anyway,
+            "no_open_browser": no_open_browser,
+            "title": title,
+            "body": body,
+            "non_interactive": non_interactive,
+        },
+        details={
+            "status": "success" if exit_code == 0 else "error",
+            "exit_code": exit_code,
+            "duration_ms": duration_ms,
+            **run_details,
+        },
+    )
+    raise SystemExit(exit_code)
 
 
 @app.command("daily-summary")
