@@ -29,6 +29,22 @@ def _debug(message: str) -> None:
         print(f"[DEBUG] pr.open: {message}", file=sys.stderr)
 
 
+def _normalize_labels(labels: Optional[list[str]]) -> list[str]:
+    """Return labels with whitespace removed and duplicates dropped."""
+    if not labels:
+        return []
+
+    normalized = []
+    seen_labels = set()
+    for raw_label in labels:
+        stripped_label = raw_label.strip()
+        if not stripped_label or stripped_label in seen_labels:
+            continue
+        seen_labels.add(stripped_label)
+        normalized.append(stripped_label)
+    return normalized
+
+
 def display_pr_info(
     github: GitHubClient, github_repo: str, pr_number: int, pr_title: str, pr_url: str
 ) -> None:
@@ -193,6 +209,7 @@ def open_pr(
     create_anyway: bool = False,
     title_override: Optional[str] = None,
     body_override: Optional[str] = None,
+    labels: Optional[list[str]] = None,
     non_interactive: bool = False,
     event_details: Optional[dict] = None,
 ) -> int:
@@ -212,9 +229,11 @@ def open_pr(
     """
     ctx = resolve_context()
     repo_root = ctx.repo_root
+    normalized_labels = _normalize_labels(labels)
     if event_details is not None:
         event_details["repo_root"] = str(repo_root)
         event_details["github_repo"] = ctx.github_repo
+        event_details["labels"] = normalized_labels
 
     # Get current branch
     branch = current_branch(repo_root)
@@ -269,6 +288,19 @@ def open_pr(
         pr_number = existing_pr["number"]
         pr_url = existing_pr["html_url"]
         pr_title = existing_pr["title"]
+
+        if normalized_labels:
+            labels_added = github.add_issue_labels(
+                github_repo, pr_number, normalized_labels
+            )
+            if labels_added:
+                rprint(
+                    f"[cyan]Applied labels:[/cyan] {', '.join(normalized_labels)}"
+                )
+            else:
+                rprint("[yellow]Warning: Failed to apply PR labels.[/yellow]")
+            if event_details is not None:
+                event_details["labels_applied"] = labels_added
 
         display_pr_info(github, github_repo, pr_number, pr_title, pr_url)
 
@@ -392,6 +424,16 @@ def open_pr(
 
     pr_number = pr["number"]
     pr_url = pr["html_url"]
+
+    if normalized_labels:
+        labels_added = github.add_issue_labels(github_repo, pr_number, normalized_labels)
+        if labels_added:
+            rprint(f"[cyan]Applied labels:[/cyan] {', '.join(normalized_labels)}")
+        else:
+            rprint("[yellow]Warning: Failed to apply PR labels.[/yellow]")
+        if event_details is not None:
+            event_details["labels_applied"] = labels_added
+
     if event_details is not None:
         event_details["pr_number"] = pr_number
         event_details["pr_url"] = pr_url

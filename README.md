@@ -159,6 +159,7 @@ If you're on a branch with a Jira issue key:
 - `--no-open-browser`: Do not open the PR URL in a browser
 - `--title`: Override generated PR title
 - `--body`: Override generated PR description
+- `--label`: Repeatable PR label to apply (only when provided)
 - `--non-interactive`: Fail instead of prompting for confirmation
 
 **AI integration:**
@@ -179,6 +180,7 @@ pwm pr
 pwm pr --no-ai
 pwm pr --non-interactive --create-anyway --no-open-browser
 pwm pr --title "[ABC-123] Manual title" --body "Manual description"
+pwm pr --label bug --label ai-assisted
 ```
 
 ### pwm work-end (alias: we)

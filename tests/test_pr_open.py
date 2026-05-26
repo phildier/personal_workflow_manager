@@ -316,3 +316,154 @@ def test_open_pr_uses_title_and_body_overrides(monkeypatch):
     assert captured["title"] == "Manual title"
     assert captured["body"] == "Manual body"
     assert captured["head"] == "ABC-123-test"
+
+
+def test_open_pr_applies_labels_to_existing_pr(monkeypatch):
+    class Ctx:
+        repo_root = Path(".")
+        github_repo = "org/repo"
+        config = {"git": {"default_remote": "origin"}}
+
+    captured = {}
+
+    class FakeGitHub:
+        def get_pr_for_branch(self, _repo, _branch):
+            return {
+                "number": 34,
+                "html_url": "https://example/pr/34",
+                "title": "Existing PR",
+            }
+
+        def add_issue_labels(self, repo, issue_number, labels):
+            nonlocal captured
+            captured = {
+                "repo": repo,
+                "issue_number": issue_number,
+                "labels": labels,
+            }
+            return True
+
+        def get_pr_details(self, _repo, _number):
+            return None
+
+        def get_pr_reviews(self, _repo, _number):
+            return []
+
+    monkeypatch.setattr("pwm.pr.open.resolve_context", lambda: Ctx())
+    monkeypatch.setattr("pwm.pr.open.current_branch", lambda _repo_root: "ABC-123-test")
+    monkeypatch.setattr(
+        "pwm.pr.open.GitHubClient.from_config",
+        classmethod(lambda cls, cfg: FakeGitHub()),
+    )
+
+    rc = open_pr(open_browser=False, use_ai=False, labels=["bug", "bug", " ops "])
+
+    assert rc == 0
+    assert captured["repo"] == "org/repo"
+    assert captured["issue_number"] == 34
+    assert captured["labels"] == ["bug", "ops"]
+
+
+def test_open_pr_applies_labels_to_new_pr(monkeypatch):
+    class Ctx:
+        repo_root = Path(".")
+        github_repo = "org/repo"
+        config = {"git": {"default_remote": "origin"}, "jira": {}}
+
+    captured = {}
+
+    class FakeGitHub:
+        def get_pr_for_branch(self, _repo, _branch):
+            return None
+
+        def create_pr(self, repo, title, head, base, body=None):
+            return {"number": 56, "html_url": "https://example/pr/56"}
+
+        def add_issue_labels(self, repo, issue_number, labels):
+            nonlocal captured
+            captured = {
+                "repo": repo,
+                "issue_number": issue_number,
+                "labels": labels,
+            }
+            return True
+
+        def get_pr_details(self, _repo, _number):
+            return None
+
+        def get_pr_reviews(self, _repo, _number):
+            return []
+
+    monkeypatch.setattr("pwm.pr.open.resolve_context", lambda: Ctx())
+    monkeypatch.setattr("pwm.pr.open.current_branch", lambda _repo_root: "ABC-123-test")
+    monkeypatch.setattr(
+        "pwm.pr.open.GitHubClient.from_config",
+        classmethod(lambda cls, cfg: FakeGitHub()),
+    )
+    monkeypatch.setattr("pwm.pr.open.get_default_branch", lambda *_args: "origin/main")
+    monkeypatch.setattr(
+        "pwm.pr.open.get_commits_since_base",
+        lambda *_args: [{"subject": "Commit subject"}],
+    )
+    monkeypatch.setattr("pwm.pr.open.push_branch", lambda *_args: True)
+    monkeypatch.setattr(
+        "pwm.pr.open.JiraClient.from_config", classmethod(lambda *_args: None)
+    )
+    monkeypatch.setattr(
+        "pwm.ai.openai_client.OpenAIClient.from_config",
+        classmethod(lambda *_args: None),
+    )
+
+    rc = open_pr(open_browser=False, use_ai=False, labels=["bug", "ai-assisted"])
+
+    assert rc == 0
+    assert captured["repo"] == "org/repo"
+    assert captured["issue_number"] == 56
+    assert captured["labels"] == ["bug", "ai-assisted"]
+
+
+def test_open_pr_without_labels_does_not_call_add_labels(monkeypatch):
+    class Ctx:
+        repo_root = Path(".")
+        github_repo = "org/repo"
+        config = {"git": {"default_remote": "origin"}, "jira": {}}
+
+    class FakeGitHub:
+        def get_pr_for_branch(self, _repo, _branch):
+            return None
+
+        def create_pr(self, repo, title, head, base, body=None):
+            return {"number": 78, "html_url": "https://example/pr/78"}
+
+        def add_issue_labels(self, repo, issue_number, labels):
+            raise AssertionError("add_issue_labels should not be called")
+
+        def get_pr_details(self, _repo, _number):
+            return None
+
+        def get_pr_reviews(self, _repo, _number):
+            return []
+
+    monkeypatch.setattr("pwm.pr.open.resolve_context", lambda: Ctx())
+    monkeypatch.setattr("pwm.pr.open.current_branch", lambda _repo_root: "ABC-123-test")
+    monkeypatch.setattr(
+        "pwm.pr.open.GitHubClient.from_config",
+        classmethod(lambda cls, cfg: FakeGitHub()),
+    )
+    monkeypatch.setattr("pwm.pr.open.get_default_branch", lambda *_args: "origin/main")
+    monkeypatch.setattr(
+        "pwm.pr.open.get_commits_since_base",
+        lambda *_args: [{"subject": "Commit subject"}],
+    )
+    monkeypatch.setattr("pwm.pr.open.push_branch", lambda *_args: True)
+    monkeypatch.setattr(
+        "pwm.pr.open.JiraClient.from_config", classmethod(lambda *_args: None)
+    )
+    monkeypatch.setattr(
+        "pwm.ai.openai_client.OpenAIClient.from_config",
+        classmethod(lambda *_args: None),
+    )
+
+    rc = open_pr(open_browser=False, use_ai=False)
+
+    assert rc == 0

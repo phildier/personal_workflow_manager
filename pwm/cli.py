@@ -264,6 +264,11 @@ def pr(
     ),
     title: Optional[str] = typer.Option(None, "--title", help="Override PR title"),
     body: Optional[str] = typer.Option(None, "--body", help="Override PR body"),
+    label: Optional[list[str]] = typer.Option(
+        None,
+        "--label",
+        help="Repeatable PR label (for example: --label bug)",
+    ),
     non_interactive: bool = typer.Option(
         False,
         "--non-interactive",
@@ -272,6 +277,17 @@ def pr(
 ) -> None:
     """Open or create a pull request for the current branch."""
     started_at = perf_counter()
+    normalized_labels = None
+    if label:
+        seen_labels = set()
+        normalized_labels = []
+        for raw_label in label:
+            stripped_label = raw_label.strip()
+            if not stripped_label or stripped_label in seen_labels:
+                continue
+            seen_labels.add(stripped_label)
+            normalized_labels.append(stripped_label)
+
     run_details: dict = {}
     exit_code = open_pr(
         use_ai=not no_ai,
@@ -279,6 +295,7 @@ def pr(
         open_browser=not no_open_browser,
         title_override=title,
         body_override=body,
+        labels=normalized_labels,
         non_interactive=non_interactive,
         event_details=run_details,
     )
@@ -291,6 +308,7 @@ def pr(
             "no_open_browser": no_open_browser,
             "title": title,
             "body": body,
+            "labels": normalized_labels,
             "non_interactive": non_interactive,
         },
         details={

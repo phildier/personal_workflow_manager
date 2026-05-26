@@ -217,3 +217,36 @@ def test_get_pr_reviews():
         assert reviews[0]["state"] == "APPROVED"
         assert reviews[1]["user"]["login"] == "reviewer2"
         assert reviews[1]["state"] == "COMMENTED"
+
+
+def test_add_issue_labels_success():
+    """Test adding labels to PR/issue succeeds."""
+    client = GitHubClient(base_url="https://api.github.com", token="test-token")
+
+    mock_response = Mock()
+    mock_response.status_code = 200
+
+    with patch("httpx.Client") as mock_client:
+        mock_instance = mock_client.return_value.__enter__.return_value
+        mock_instance.post.return_value = mock_response
+
+        ok = client.add_issue_labels("owner/repo", 42, ["bug", "ai-assisted"])
+
+        assert ok is True
+        call_args = mock_instance.post.call_args
+        assert call_args[1]["json"] == {"labels": ["bug", "ai-assisted"]}
+
+
+def test_add_issue_labels_failure():
+    """Test adding labels to PR/issue handles API failure."""
+    client = GitHubClient(base_url="https://api.github.com", token="test-token")
+
+    mock_response = Mock()
+    mock_response.status_code = 422
+
+    with patch("httpx.Client") as mock_client:
+        mock_client.return_value.__enter__.return_value.post.return_value = mock_response
+
+        ok = client.add_issue_labels("owner/repo", 42, ["bug"])
+
+        assert ok is False

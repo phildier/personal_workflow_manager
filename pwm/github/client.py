@@ -275,6 +275,28 @@ class GitHubClient:
             self._debug(f"request_reviewers #{pr_number} request raised exception")
         return False
 
+    def add_issue_labels(
+        self, repo: str, issue_number: int, labels: list[str]
+    ) -> bool:
+        """Add labels to a pull request or issue via Issues API."""
+        if not labels:
+            return True
+
+        url = f"{self.base_url}/repos/{repo}/issues/{issue_number}/labels"
+        payload = {"labels": labels}
+
+        try:
+            with httpx.Client(timeout=10.0) as c:
+                r = c.post(url, headers=self._headers(), json=payload)
+                if r.status_code in (200, 201):
+                    return True
+                self._debug(
+                    f"add_issue_labels #{issue_number} returned HTTP {r.status_code}"
+                )
+        except Exception:
+            self._debug(f"add_issue_labels #{issue_number} request raised exception")
+        return False
+
     def get_last_pwm_comment_time(self, repo: str, pr_number: int) -> Optional[datetime]:
         """
         Get the timestamp of the most recent pwm-generated comment on a PR.

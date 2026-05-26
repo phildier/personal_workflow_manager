@@ -172,6 +172,12 @@ def test_pr_passes_non_interactive_flags(monkeypatch):
             "Manual title",
             "--body",
             "Manual body",
+            "--label",
+            "bug",
+            "--label",
+            "ai-assisted",
+            "--label",
+            "bug",
             "--non-interactive",
         ],
     )
@@ -182,6 +188,7 @@ def test_pr_passes_non_interactive_flags(monkeypatch):
     assert captured["open_browser"] is False
     assert captured["title_override"] == "Manual title"
     assert captured["body_override"] == "Manual body"
+    assert captured["labels"] == ["bug", "ai-assisted"]
     assert captured["non_interactive"] is True
     assert logged
     assert logged[0]["command"] == "pr"

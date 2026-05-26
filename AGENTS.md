@@ -72,6 +72,7 @@ pwm work-start ABC-123 --no-transition --no-comment
 **Open or create a pull request**
 ```bash
 pwm pr
+pwm pr --label bug --label ai-assisted
 ```
 
 **Post status update**
