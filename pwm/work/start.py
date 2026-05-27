@@ -21,6 +21,7 @@ def work_start(
     issue_type: Optional[str] = None,
     labels: Optional[list[str]] = None,
     story_points: Optional[float] = None,
+    epic: Optional[str] = None,
     custom_fields: Optional[dict] = None,
     save_defaults: Optional[bool] = None,
     event_details: Optional[dict] = None,
@@ -69,6 +70,7 @@ def work_start(
             issue_type=issue_type,
             labels=labels,
             story_points=story_points,
+            epic=epic,
             custom_fields=custom_fields,
             save_defaults=save_defaults,
         )

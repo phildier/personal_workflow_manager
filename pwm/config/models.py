@@ -6,6 +6,7 @@ from typing import Optional, Dict, Any
 class JiraIssueDefaults(BaseModel):
     issue_type: str = "Story"
     labels: list[str] = Field(default_factory=list)
+    parent_epic_key: Optional[str] = None
     custom_fields: Dict[str, Any] = Field(default_factory=dict)  # e.g., {"customfield_10370": {"value": "Team A"}}
 
 class JiraConfig(BaseModel):

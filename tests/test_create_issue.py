@@ -1,6 +1,8 @@
+import pwm.work.epic_history as epic_history_module
 from pwm.work.create_issue import (
     build_non_interactive_issue_details,
     parse_custom_field_values,
+    record_epic_in_history,
 )
 
 
@@ -93,3 +95,56 @@ def test_build_non_interactive_issue_details_fails_on_missing_required_fields():
     )
 
     assert details is None
+
+
+def test_build_non_interactive_issue_details_includes_parent_epic_for_task():
+    class FakeJira:
+        def get_create_metadata(self, _project_key, _issue_type):
+            return {}
+
+    details = build_non_interactive_issue_details(
+        jira=FakeJira(),
+        project_key="ABC",
+        config={"jira": {"issue_defaults": {}}},
+        summary="Task with parent",
+        issue_type="Task",
+        parent_epic_key="ABC-777",
+    )
+
+    assert details is not None
+    assert details["parent_epic_key"] == "ABC-777"
+
+
+def test_build_non_interactive_issue_details_ignores_parent_for_epic_type():
+    class FakeJira:
+        def get_create_metadata(self, _project_key, _issue_type):
+            return {}
+
+    details = build_non_interactive_issue_details(
+        jira=FakeJira(),
+        project_key="ABC",
+        config={"jira": {"issue_defaults": {}}},
+        summary="Epic item",
+        issue_type="Epic",
+        parent_epic_key="ABC-777",
+    )
+
+    assert details is not None
+    assert details["parent_epic_key"] is None
+
+
+def test_record_epic_in_history_dedupes_and_updates_latest(monkeypatch, tmp_path):
+    history_file = tmp_path / "epic_history.json"
+    monkeypatch.setattr(epic_history_module, "EPIC_HISTORY_FILE", history_file)
+
+    record_epic_in_history("ABC-1", "First epic", "ABC")
+    record_epic_in_history("ABC-2", "Second epic", "ABC")
+    record_epic_in_history("ABC-1", "First epic renamed", "ABC")
+
+    saved = history_file.read_text(encoding="utf-8")
+    assert "ABC-1" in saved
+    assert "First epic renamed" in saved
+
+    data = epic_history_module.load_epic_history()
+    assert len(data) == 2
+    assert data[0]["key"] == "ABC-1"

@@ -12,6 +12,7 @@ from pwm.check.self_check import self_check
 from pwm.pr.open import open_pr
 from pwm.summary.command import daily_summary
 from pwm.log.events import append_event
+from pwm.work.epic_history import epic_history_command
 
 app = typer.Typer(help="Personal Workflow Manager")
 
@@ -77,6 +78,11 @@ def work_start_cmd(
         None,
         "--story-points",
         help="Story points for --new",
+    ),
+    epic: Optional[str] = typer.Option(
+        None,
+        "--epic",
+        help="Parent epic key for --new (for example: ABC-123)",
     ),
     custom_field: list[str] = typer.Option(
         None,
@@ -165,6 +171,7 @@ def work_start_cmd(
         issue_type=issue_type,
         labels=parsed_labels,
         story_points=story_points,
+        epic=epic,
         custom_fields=parsed_custom_fields,
         save_defaults=resolved_save_defaults,
         event_details=run_details,
@@ -184,6 +191,7 @@ def work_start_cmd(
             "issue_type": issue_type,
             "labels": parsed_labels,
             "story_points": story_points,
+            "epic": epic,
             "custom_fields": parsed_custom_fields,
             "save_defaults": resolved_save_defaults,
         },
@@ -228,6 +236,44 @@ def work_end_cmd(
 def self_check_cmd() -> None:
     """Run connectivity and setup checks for git, Jira, and GitHub."""
     raise SystemExit(self_check())
+
+
+@app.command("epic-history")
+def epic_history_cmd(
+    project: Optional[str] = typer.Option(
+        None, "--project", help="Filter history by Jira project key"
+    ),
+    limit: int = typer.Option(50, "--limit", min=1, help="Maximum rows to show"),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON"),
+    clear: bool = typer.Option(False, "--clear", help="Clear epic history cache"),
+    set_default: Optional[str] = typer.Option(
+        None,
+        "--set-default",
+        help="Set repo-local default parent epic key",
+    ),
+    clear_default: bool = typer.Option(
+        False,
+        "--clear-default",
+        help="Clear repo-local default parent epic key",
+    ),
+    yes: bool = typer.Option(
+        False,
+        "--yes",
+        help="Skip confirmation when used with --clear",
+    ),
+) -> None:
+    """Inspect or clear cached parent epic history."""
+    raise SystemExit(
+        epic_history_command(
+            project=project,
+            limit=limit,
+            as_json=json_output,
+            clear=clear,
+            yes=yes,
+            set_default=set_default,
+            clear_default=clear_default,
+        )
+    )
 
 
 @app.command()

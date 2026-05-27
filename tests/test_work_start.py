@@ -158,6 +158,7 @@ def test_work_start_new_non_interactive_forwards_issue_args(monkeypatch, tmp_pat
         issue_type="Task",
         labels=["automation", "cli"],
         story_points=3.0,
+        epic="TEST-100",
         custom_fields={"customfield_123": "value"},
         save_defaults=False,
     )
@@ -169,6 +170,7 @@ def test_work_start_new_non_interactive_forwards_issue_args(monkeypatch, tmp_pat
     assert captured_create_issue_kwargs["issue_type"] == "Task"
     assert captured_create_issue_kwargs["labels"] == ["automation", "cli"]
     assert captured_create_issue_kwargs["story_points"] == 3.0
+    assert captured_create_issue_kwargs["epic"] == "TEST-100"
     assert captured_create_issue_kwargs["custom_fields"] == {
         "customfield_123": "value"
     }

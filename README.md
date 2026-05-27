@@ -12,6 +12,8 @@ It automatically detects project context, helps create and manage branches tied 
 - Project context resolution: auto-detects the current Git repo and loads merged global and project configs.
 - Config initialization: `pwm init` scaffolds `.pwm.toml` with inferred defaults (for example, the GitHub repo).
 - Work start automation: `pwm work-start <ISSUE>` creates or switches to a branch, optionally transitions the Jira issue to In Progress, and adds a Jira comment. Use `--new` to create a new Jira issue first.
+- Epic-aware issue creation: `pwm work-start --new` can assign a parent epic for Story/Bug/Spike/Task/Incident issues, supports non-interactive `--epic`, and caches created epics for future selection.
+- Epic history tools: `pwm epic-history` lists or clears cached epics used for parent selection.
 - Pull request automation: `pwm pr` creates or opens pull requests with auto-generated title and description from commits and Jira context.
 - Command event log: `ws` and `pr` append JSONL events to `~/.config/pwm/log.jsonl` (with size-based rotation) for repo/branch traceability.
 - Status updates: `pwm work-end` posts concise summaries to PR and Jira with recent changes, optionally requesting reviewers.
@@ -116,6 +118,7 @@ After creating the issue, you'll be asked if you want to save the issue type, la
 ```
 pwm work-start --new --non-interactive --summary "Implement X"
 pwm ws --new --non-interactive --summary "Implement X" --issue-type Task --labels backend,api --story-points 5 --custom-field customfield_10370='{"value":"Platform Team"}' --save-defaults
+pwm ws --new --non-interactive --summary "Fix API bug" --issue-type Bug --epic ABC-100
 ```
 
 **Non-interactive options:**
@@ -125,10 +128,35 @@ pwm ws --new --non-interactive --summary "Implement X" --issue-type Task --label
 - `--issue-type`: Override issue type (defaults from `.pwm.toml`)
 - `--labels`: Comma-separated labels (defaults from `.pwm.toml`)
 - `--story-points`: Numeric story points
+- `--epic`: Parent epic key (for Story, Bug, Spike, Task, Incident)
 - `--custom-field KEY=VALUE`: Repeatable custom field values (VALUE may be JSON)
 - `--save-defaults` / `--no-save-defaults`: Control default persistence without prompts
 
 Note: `--new` requires Jira to be configured. See Configuration section above.
+
+### pwm epic-history
+Inspect or clear the local epic history cache (`~/.config/pwm/epic_history.json`).
+
+**Options:**
+- `--project ABC`: Filter rows by Jira project key
+- `--limit 25`: Show at most N rows
+- `--json`: Output JSON for scripts
+- `--set-default ABC-123`: Set repo-local default parent epic
+- `--clear-default`: Remove repo-local default parent epic
+- `--clear`: Clear cache (with confirmation)
+- `--yes`: Skip confirmation when clearing
+
+When using `--set-default`, if the epic is not already cached, pwm attempts to
+look it up in Jira, verifies it's an Epic, and adds it to cache automatically.
+
+```bash
+pwm epic-history
+pwm epic-history --project ABC --limit 20
+pwm epic-history --json
+pwm epic-history --set-default ABC-123
+pwm epic-history --clear-default
+pwm epic-history --clear --yes
+```
 
 **Work on existing issue:**
 ```

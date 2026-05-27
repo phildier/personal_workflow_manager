@@ -67,12 +67,24 @@ pwm work-start --new  # or: pwm ws --new
 # Work on existing issue
 pwm work-start ABC-123  # or: pwm ws ABC-123
 pwm work-start ABC-123 --no-transition --no-comment
+
+# Create issue with parent epic (non-interactive)
+pwm ws --new --non-interactive --summary "Fix API bug" --issue-type Bug --epic ABC-100
 ```
 
 **Open or create a pull request**
 ```bash
 pwm pr
 pwm pr --label bug --label ai-assisted
+```
+
+**Inspect epic cache**
+```bash
+pwm epic-history
+pwm epic-history --project ABC --limit 20
+pwm epic-history --set-default ABC-123
+pwm epic-history --clear-default
+pwm epic-history --clear --yes
 ```
 
 **Post status update**

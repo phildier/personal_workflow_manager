@@ -273,6 +273,7 @@ class JiraClient:
         issue_type: str = "Story",
         description: Optional[str] = None,
         labels: Optional[list[str]] = None,
+        parent_epic_key: Optional[str] = None,
         custom_fields: Optional[dict] = None,
         assign_to_self: bool = True,
     ) -> Optional[str]:
@@ -285,6 +286,7 @@ class JiraClient:
             issue_type: Issue type name (e.g., "Story", "Bug")
             description: Issue description
             labels: List of labels
+            parent_epic_key: Optional parent epic key (e.g., "ABC-123")
             custom_fields: Dict of custom field IDs to values (e.g., {"customfield_10370": {"value": "Team A"}})
             assign_to_self: Assign the issue to the current user (default: True)
 
@@ -320,6 +322,18 @@ class JiraClient:
         if labels:
             fields["labels"] = labels
 
+        if parent_epic_key:
+            parent_field = self._resolve_parent_epic_field(project_key, issue_type)
+            if parent_field == "parent":
+                fields["parent"] = {"key": parent_epic_key}
+            elif parent_field:
+                fields[parent_field] = parent_epic_key
+            else:
+                self._debug(
+                    "No parent-compatible field found in create metadata for "
+                    f"{project_key}/{issue_type}"
+                )
+
         # Add custom fields
         if custom_fields:
             fields.update(custom_fields)
@@ -348,6 +362,32 @@ class JiraClient:
                 file=sys.stderr,
             )
             return None
+
+    def _resolve_parent_epic_field(
+        self, project_key: str, issue_type_name: str
+    ) -> Optional[str]:
+        """Resolve parent field for linking issue to an epic."""
+        metadata = self.get_create_metadata(project_key, issue_type_name)
+        if not metadata:
+            return None
+
+        if "parent" in metadata:
+            return "parent"
+
+        for field_id, field_info in metadata.items():
+            if not field_id.startswith("customfield_"):
+                continue
+
+            field_name = str(field_info.get("name", "")).strip().lower()
+            field_schema = field_info.get("schema", {}) or {}
+            schema_custom = str(field_schema.get("custom", "")).lower()
+
+            if "epic link" in field_name:
+                return field_id
+            if "epic-link" in schema_custom or "gh-epic-link" in schema_custom:
+                return field_id
+
+        return None
 
     def search_issues_by_date(self, jql: str, max_results: int = 100) -> list[dict]:
         """

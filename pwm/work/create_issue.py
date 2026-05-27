@@ -6,6 +6,7 @@ from rich.prompt import Prompt, Confirm
 from rich import print as rprint
 
 from pwm.jira.client import JiraClient
+from pwm.work.epic_history import load_epic_history, upsert_epic_history
 from pwm.work.terminal import ensure_backspace_support
 
 
@@ -17,6 +18,88 @@ STANDARD_CREATE_FIELDS = {
     "labels",
 }
 
+PARENT_COMPATIBLE_ISSUE_TYPES = {"story", "bug", "spike", "task", "incident"}
+
+
+def _is_parent_compatible_issue_type(issue_type: str) -> bool:
+    """Return True when issue type can link to a parent epic."""
+    return issue_type.strip().lower() in PARENT_COMPATIBLE_ISSUE_TYPES
+
+
+def record_epic_in_history(epic_key: str, title: str, project_key: str) -> None:
+    """Store or refresh an epic entry in history."""
+    upsert_epic_history(epic_key, title, project_key)
+
+
+def _prompt_for_parent_epic(
+    issue_type: str,
+    project_key: str,
+    default_parent_epic_key: Optional[str],
+) -> Optional[str]:
+    """Prompt for optional parent epic using prompt_toolkit search."""
+    if not _is_parent_compatible_issue_type(issue_type):
+        return None
+
+    history = [
+        entry
+        for entry in load_epic_history()
+        if not project_key or entry.get("project_key") in {"", project_key}
+    ]
+    if not history:
+        return None
+
+    try:
+        from prompt_toolkit import prompt as pt_prompt
+        from prompt_toolkit.completion import FuzzyCompleter, WordCompleter
+    except Exception:
+        rprint("[yellow]Warning: prompt_toolkit unavailable; skipping epic picker.[/yellow]")
+        return None
+
+    labels = [f"{entry['key']} {entry['title']}" for entry in history]
+    completer = FuzzyCompleter(WordCompleter(labels, ignore_case=True))
+
+    if default_parent_epic_key:
+        rprint(
+            "[dim]Tip: type 'default' to use saved parent epic "
+            f"{default_parent_epic_key}.[/dim]"
+        )
+
+    while True:
+        query = pt_prompt(
+            "Parent epic (search key/title, Enter for none): ",
+            completer=completer,
+            complete_while_typing=True,
+        ).strip()
+
+        if not query:
+            return None
+        if default_parent_epic_key and query.lower() == "default":
+            return default_parent_epic_key
+
+        for entry in history:
+            if query.upper() == entry["key"].upper():
+                return entry["key"]
+
+        query_lower = query.lower()
+        matches = [
+            entry
+            for entry in history
+            if query_lower in entry["key"].lower()
+            or query_lower in entry["title"].lower()
+        ]
+        if len(matches) == 1:
+            return matches[0]["key"]
+
+        if len(matches) > 1:
+            preview = ", ".join(
+                [f"{entry['key']} ({entry['title']})" for entry in matches[:5]]
+            )
+            rprint(f"[yellow]Multiple matches:[/yellow] {preview}")
+            rprint("[dim]Keep typing to narrow, or enter exact epic key.[/dim]")
+            continue
+
+        rprint("[yellow]No epic match found. Try again, or press Enter for none.[/yellow]")
+
 
 def build_non_interactive_issue_details(
     jira: JiraClient,
@@ -27,6 +110,7 @@ def build_non_interactive_issue_details(
     issue_type: Optional[str] = None,
     labels: Optional[list[str]] = None,
     story_points: Optional[float] = None,
+    parent_epic_key: Optional[str] = None,
     custom_fields: Optional[dict] = None,
 ) -> Optional[dict]:
     """Build issue details without interactive prompts."""
@@ -40,6 +124,14 @@ def build_non_interactive_issue_details(
         resolved_custom_fields.update(custom_fields)
 
     metadata = jira.get_create_metadata(project_key, resolved_issue_type)
+    resolved_parent_epic_key = None
+    if parent_epic_key and _is_parent_compatible_issue_type(resolved_issue_type):
+        resolved_parent_epic_key = parent_epic_key.strip() or None
+    elif parent_epic_key:
+        rprint(
+            "[yellow]Warning: --epic is ignored for issue type "
+            f"{resolved_issue_type}.[/yellow]"
+        )
 
     # Map story points into the proper custom field if available.
     if story_points is not None and metadata:
@@ -87,6 +179,7 @@ def build_non_interactive_issue_details(
         "description": description or None,
         "issue_type": resolved_issue_type,
         "labels": resolved_labels,
+        "parent_epic_key": resolved_parent_epic_key,
         "custom_fields": resolved_custom_fields,
     }
 
@@ -122,12 +215,13 @@ def prompt_for_issue_details(
     project_key: str,
     default_issue_type: str = "Story",
     default_labels: Optional[list[str]] = None,
+    default_parent_epic_key: Optional[str] = None,
     default_custom_fields: Optional[dict] = None,
 ) -> Optional[dict]:
     """
     Interactively prompt for issue details.
 
-    Returns a dict with 'summary', 'description', 'issue_type', 'labels', 'custom_fields' or None if cancelled.
+    Returns issue details dict or None if cancelled.
     """
     with ensure_backspace_support():
         rprint("[bold cyan]Create new Jira issue[/bold cyan]")
@@ -165,6 +259,12 @@ def prompt_for_issue_details(
         else:
             issue_type = default_type
             rprint(f"[dim]Using issue type: {issue_type}[/dim]")
+
+        parent_epic_key = _prompt_for_parent_epic(
+            issue_type,
+            project_key,
+            default_parent_epic_key,
+        )
 
         # Labels (optional, comma-separated)
         default_labels_str = ",".join(default_labels) if default_labels else ""
@@ -351,6 +451,7 @@ def prompt_for_issue_details(
         "description": description or None,
         "issue_type": issue_type,
         "labels": labels,
+        "parent_epic_key": parent_epic_key,
         "custom_fields": custom_fields,
     }
 
@@ -359,6 +460,7 @@ def save_issue_defaults(
     repo_root: Path,
     issue_type: str,
     labels: list[str],
+    parent_epic_key: Optional[str] = None,
     custom_fields: Optional[dict] = None,
 ) -> None:
     """
@@ -386,6 +488,11 @@ def save_issue_defaults(
     if labels:
         existing_config["jira"]["issue_defaults"]["labels"] = labels
 
+    if parent_epic_key:
+        existing_config["jira"]["issue_defaults"]["parent_epic_key"] = (
+            parent_epic_key
+        )
+
     # Add custom fields if provided
     if custom_fields:
         existing_config["jira"]["issue_defaults"]["custom_fields"] = {}
@@ -411,6 +518,7 @@ def create_new_issue(
     issue_type: Optional[str] = None,
     labels: Optional[list[str]] = None,
     story_points: Optional[float] = None,
+    epic: Optional[str] = None,
     custom_fields: Optional[dict] = None,
     save_defaults: Optional[bool] = None,
 ) -> Optional[str]:
@@ -423,6 +531,7 @@ def create_new_issue(
     defaults = config.get("jira", {}).get("issue_defaults", {})
     default_issue_type = defaults.get("issue_type", "Story")
     default_labels = defaults.get("labels", [])
+    default_parent_epic_key = defaults.get("parent_epic_key")
     default_custom_fields = defaults.get("custom_fields", {})
 
     if non_interactive:
@@ -441,6 +550,7 @@ def create_new_issue(
             issue_type=issue_type,
             labels=labels,
             story_points=story_points,
+            parent_epic_key=epic,
             custom_fields=custom_fields,
         )
     else:
@@ -450,6 +560,7 @@ def create_new_issue(
             project_key,
             default_issue_type,
             default_labels,
+            default_parent_epic_key,
             default_custom_fields,
         )
 
@@ -464,6 +575,7 @@ def create_new_issue(
         issue_type=details["issue_type"],
         description=details["description"],
         labels=details["labels"],
+        parent_epic_key=details.get("parent_epic_key"),
         custom_fields=details.get("custom_fields", {}),
     )
 
@@ -474,14 +586,19 @@ def create_new_issue(
     rprint(f"[green]Created issue: {issue_key}[/green]")
     rprint(f"[dim]{jira.base_url}/browse/{issue_key}[/dim]")
 
+    if details["issue_type"].strip().lower() == "epic":
+        record_epic_in_history(issue_key, details["summary"], project_key)
+
     # Save defaults for next time
     should_save = False
     custom_fields_to_save = {}
+    parent_epic_to_save = details.get("parent_epic_key")
 
     # Check if issue type or labels changed
     if (
         details["issue_type"] != default_issue_type
         or details["labels"] != default_labels
+        or parent_epic_to_save != default_parent_epic_key
     ):
         should_save = True
 
@@ -506,7 +623,7 @@ def create_new_issue(
             prompt_text = (
                 "Save issue type, labels, and custom fields as defaults?"
                 if custom_fields_to_save
-                else "Save issue type and labels as defaults?"
+                else "Save issue type, labels, and parent epic as defaults?"
             )
             resolved_save_defaults = Confirm.ask(prompt_text, default=True)
         else:
@@ -517,6 +634,7 @@ def create_new_issue(
                 repo_root,
                 details["issue_type"],
                 details["labels"],
+                parent_epic_to_save,
                 custom_fields_to_save if custom_fields_to_save else None,
             )
 

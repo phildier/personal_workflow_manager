@@ -337,3 +337,114 @@ def test_jira_debug_logging_respects_pwm_debug(monkeypatch, capsys):
     assert jc.get_issue("ABC-1") is None
     captured = capsys.readouterr()
     assert "[DEBUG] JiraClient: get_issue ABC-1 request raised exception" in captured.err
+
+
+def test_create_issue_uses_parent_field_when_available(monkeypatch):
+    jc = JiraClient(base_url="https://example.atlassian.net", email="u", token="t")
+    captured_payload = {}
+
+    class CaptureClient:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def get(self, url, params=None):
+            if url.endswith("/rest/api/3/myself"):
+                return FakeResp(200, {"accountId": "acct-1"})
+            if url.endswith("/rest/api/3/issue/createmeta"):
+                return FakeResp(
+                    200,
+                    {
+                        "projects": [
+                            {
+                                "issuetypes": [
+                                    {
+                                        "fields": {
+                                            "parent": {
+                                                "name": "Parent",
+                                                "schema": {"type": "issuelink"},
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                )
+            return FakeResp(404, {})
+
+        def post(self, url, json=None):
+            nonlocal captured_payload
+            captured_payload = json
+            return FakeResp(201, {"key": "ABC-12"})
+
+    monkeypatch.setattr(JiraClient, "_client", lambda self: CaptureClient())
+
+    issue_key = jc.create_issue(
+        project_key="ABC",
+        summary="Story with parent",
+        issue_type="Story",
+        parent_epic_key="ABC-1",
+    )
+
+    assert issue_key == "ABC-12"
+    assert captured_payload["fields"]["parent"] == {"key": "ABC-1"}
+
+
+def test_create_issue_uses_epic_link_custom_field(monkeypatch):
+    jc = JiraClient(base_url="https://example.atlassian.net", email="u", token="t")
+    captured_payload = {}
+
+    class CaptureClient:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def get(self, url, params=None):
+            if url.endswith("/rest/api/3/myself"):
+                return FakeResp(200, {"accountId": "acct-1"})
+            if url.endswith("/rest/api/3/issue/createmeta"):
+                return FakeResp(
+                    200,
+                    {
+                        "projects": [
+                            {
+                                "issuetypes": [
+                                    {
+                                        "fields": {
+                                            "customfield_12345": {
+                                                "name": "Epic Link",
+                                                "schema": {
+                                                    "type": "any",
+                                                    "custom": "com.pyxis.greenhopper.jira:gh-epic-link",
+                                                },
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                )
+            return FakeResp(404, {})
+
+        def post(self, url, json=None):
+            nonlocal captured_payload
+            captured_payload = json
+            return FakeResp(201, {"key": "ABC-15"})
+
+    monkeypatch.setattr(JiraClient, "_client", lambda self: CaptureClient())
+
+    issue_key = jc.create_issue(
+        project_key="ABC",
+        summary="Task with parent",
+        issue_type="Task",
+        parent_epic_key="ABC-1",
+    )
+
+    assert issue_key == "ABC-15"
+    assert captured_payload["fields"]["customfield_12345"] == "ABC-1"

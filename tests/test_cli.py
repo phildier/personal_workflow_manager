@@ -112,6 +112,8 @@ def test_ws_non_interactive_new_passes_args(monkeypatch):
             "backend,api",
             "--story-points",
             "5",
+            "--epic",
+            "ABC-999",
             "--custom-field",
             "customfield_123=value",
             "--save-defaults",
@@ -126,6 +128,7 @@ def test_ws_non_interactive_new_passes_args(monkeypatch):
     assert captured["issue_type"] == "Task"
     assert captured["labels"] == ["backend", "api"]
     assert captured["story_points"] == 5.0
+    assert captured["epic"] == "ABC-999"
     assert captured["custom_fields"] == {"customfield_123": "value"}
     assert captured["save_defaults"] is True
     assert logged
@@ -192,3 +195,56 @@ def test_pr_passes_non_interactive_flags(monkeypatch):
     assert captured["non_interactive"] is True
     assert logged
     assert logged[0]["command"] == "pr"
+
+
+def test_epic_history_passes_options(monkeypatch):
+    captured = {}
+
+    def fake_epic_history_command(**kwargs):
+        nonlocal captured
+        captured = kwargs
+        return 0
+
+    monkeypatch.setattr("pwm.cli.epic_history_command", fake_epic_history_command)
+
+    result = runner.invoke(
+        app,
+        [
+            "epic-history",
+            "--project",
+            "ABC",
+            "--limit",
+            "25",
+            "--json",
+            "--clear",
+            "--yes",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured == {
+        "project": "ABC",
+        "limit": 25,
+        "as_json": True,
+        "clear": True,
+        "yes": True,
+        "set_default": None,
+        "clear_default": False,
+    }
+
+
+def test_epic_history_set_default_passes_args(monkeypatch):
+    captured = {}
+
+    def fake_epic_history_command(**kwargs):
+        nonlocal captured
+        captured = kwargs
+        return 0
+
+    monkeypatch.setattr("pwm.cli.epic_history_command", fake_epic_history_command)
+
+    result = runner.invoke(app, ["epic-history", "--set-default", "ABC-123"])
+
+    assert result.exit_code == 0
+    assert captured["set_default"] == "ABC-123"
+    assert captured["clear_default"] is False
