@@ -6,6 +6,7 @@ from pwm.context.command import show_context
 from pwm.setup.init import init_project
 from pwm.prompt.command import prompt_command, PromptFormat
 from pwm.work.start import work_start
+from pwm.work.create import issue_create
 from pwm.work.create_issue import parse_custom_field_values
 from pwm.work.end import work_end
 from pwm.check.self_check import self_check
@@ -230,6 +231,169 @@ def work_end_cmd(
             request_review=request_review,
         )
     )
+
+
+@app.command("issue-create")
+@app.command("ic")
+def issue_create_cmd(
+    ctx: typer.Context,
+    non_interactive: bool = typer.Option(
+        False,
+        "--non-interactive",
+        help="Fail instead of prompting for missing values",
+    ),
+    summary: Optional[str] = typer.Option(
+        None,
+        "--summary",
+        help="Jira summary (required with --non-interactive)",
+    ),
+    description: Optional[str] = typer.Option(
+        None,
+        "--description",
+        help="Jira description",
+    ),
+    issue_type: Optional[str] = typer.Option(
+        None,
+        "--issue-type",
+        help="Jira issue type (for example: Story, Task, Bug)",
+    ),
+    labels: Optional[str] = typer.Option(
+        None,
+        "--labels",
+        help="Comma-separated labels",
+    ),
+    story_points: Optional[float] = typer.Option(
+        None,
+        "--story-points",
+        help="Story points",
+    ),
+    epic: Optional[str] = typer.Option(
+        None,
+        "--epic",
+        help="Parent epic key (for example: ABC-123)",
+    ),
+    custom_field: list[str] = typer.Option(
+        None,
+        "--custom-field",
+        help="Repeatable KEY=VALUE pairs for Jira custom fields",
+    ),
+    save_defaults: bool = typer.Option(
+        False,
+        "--save-defaults",
+        help="Save provided issue values as defaults after creation",
+    ),
+    no_save_defaults: bool = typer.Option(
+        False,
+        "--no-save-defaults",
+        help="Do not save issue values as defaults after creation",
+    ),
+) -> None:
+    """Create a Jira issue without branch or transition actions."""
+    started_at = perf_counter()
+
+    has_intent = any(
+        [
+            non_interactive,
+            summary is not None,
+            description is not None,
+            issue_type is not None,
+            labels is not None,
+            story_points is not None,
+            epic is not None,
+            bool(custom_field),
+            save_defaults,
+            no_save_defaults,
+        ]
+    )
+    if not has_intent:
+        append_event(
+            command="ic",
+            args={},
+            details={
+                "status": "success",
+                "exit_code": 0,
+                "note": "Displayed command help",
+            },
+        )
+        typer.echo(ctx.get_help())
+        raise typer.Exit(0)
+
+    if save_defaults and no_save_defaults:
+        append_event(
+            command="ic",
+            args={},
+            details={
+                "status": "error",
+                "exit_code": 2,
+                "error": "Conflicting save-default flags",
+            },
+        )
+        raise typer.BadParameter(
+            "Cannot use both --save-defaults and --no-save-defaults"
+        )
+
+    parsed_labels = None
+    if labels is not None:
+        parsed_labels = [label.strip() for label in labels.split(",") if label.strip()]
+
+    parsed_custom_fields = None
+    if custom_field:
+        try:
+            parsed_custom_fields = parse_custom_field_values(custom_field)
+        except ValueError as exc:
+            append_event(
+                command="ic",
+                args={"custom_field": custom_field},
+                details={
+                    "status": "error",
+                    "exit_code": 2,
+                    "error": str(exc),
+                },
+            )
+            raise typer.BadParameter(str(exc)) from exc
+
+    resolved_save_defaults = None
+    if save_defaults:
+        resolved_save_defaults = True
+    elif no_save_defaults:
+        resolved_save_defaults = False
+
+    run_details: dict = {}
+    exit_code = issue_create(
+        non_interactive=non_interactive,
+        summary=summary,
+        description=description,
+        issue_type=issue_type,
+        labels=parsed_labels,
+        story_points=story_points,
+        epic=epic,
+        custom_fields=parsed_custom_fields,
+        save_defaults=resolved_save_defaults,
+        event_details=run_details,
+    )
+
+    duration_ms = int((perf_counter() - started_at) * 1000)
+    append_event(
+        command="ic",
+        args={
+            "non_interactive": non_interactive,
+            "summary": summary,
+            "description": description,
+            "issue_type": issue_type,
+            "labels": parsed_labels,
+            "story_points": story_points,
+            "epic": epic,
+            "custom_fields": parsed_custom_fields,
+            "save_defaults": resolved_save_defaults,
+        },
+        details={
+            "status": "success" if exit_code == 0 else "error",
+            "exit_code": exit_code,
+            "duration_ms": duration_ms,
+            **run_details,
+        },
+    )
+    raise SystemExit(exit_code)
 
 
 @app.command("self-check")

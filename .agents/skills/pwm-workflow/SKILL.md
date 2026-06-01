@@ -1,6 +1,6 @@
 ---
 name: pwm-workflow
-description: Guides agents to run Personal Workflow Manager non-interactively for Jira work-start flows (`pwm ws`) and pull request flows (`pwm pr`). Use when automation must avoid interactive prompts.
+description: Guides agents to run Personal Workflow Manager non-interactively for Jira issue-create flows (`pwm ic`), Jira work-start flows (`pwm ws`), and pull request flows (`pwm pr`). Use when automation must avoid interactive prompts.
 license: Proprietary
 compatibility: Agent Skills compatible clients.
 metadata:
@@ -13,11 +13,12 @@ metadata:
 
 ## Purpose
 
-Execute reliable, non-interactive `pwm ws` and `pwm pr` workflows.
+Execute reliable, non-interactive `pwm ic`, `pwm ws`, and `pwm pr` workflows.
 
 ## Use This Skill When
 
 - The user asks to create/start Jira work with `pwm ws` in automation.
+- The user needs issue creation without branch changes via `pwm ic`.
 - The user needs `pwm ws --new` without prompt collection.
 - The user needs `pwm pr` creation in non-interactive sessions.
 
@@ -28,8 +29,14 @@ Execute reliable, non-interactive `pwm ws` and `pwm pr` workflows.
 
 ## Core Non-Interactive Commands
 
+- Create Jira issue only (no branch changes):
+  - `pwm ic --non-interactive --summary "Implement feature X" --issue-type Task`
+- Create Jira issue only with parent epic:
+  - `pwm ic --non-interactive --summary "Fix API bug" --issue-type Bug --epic ABC-100`
 - Create and start a new Jira issue:
   - `pwm ws --new --non-interactive --summary "Implement feature X"`
+- Create and start a new Jira issue with parent epic:
+  - `pwm ws --new --non-interactive --summary "Implement feature X" --issue-type Task --epic ABC-100`
 - Start existing Jira issue:
   - `pwm ws ABC-123 --no-transition --no-comment`
 - Create/open PR without interactive confirms or browser launch:
@@ -39,10 +46,15 @@ Execute reliable, non-interactive `pwm ws` and `pwm pr` workflows.
 
 ## Required Inputs
 
+- For `pwm ic --non-interactive`, always provide `--summary`.
 - For `pwm ws --new --non-interactive`, always provide `--summary`.
 - Provide `--issue-type`, `--labels`, `--story-points`, and repeatable
   `--custom-field KEY=VALUE` when project defaults are insufficient.
+- Use `--epic ABC-123` to set parent epic for supported issue types:
+  Story, Bug, Spike, Task, Incident.
 - Use `--save-defaults` or `--no-save-defaults` to avoid default-save prompts.
+- `pwm ic` creates Jira issues only. It does not switch branches, transition
+  issues, or post start-work comments.
 - Use `--no-ai` when deterministic PR metadata is preferred.
 - Use repeatable `--label` to apply labels to either an existing PR or a newly
   created PR; no labels are applied unless `--label` is provided.

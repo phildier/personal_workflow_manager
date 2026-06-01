@@ -1,5 +1,6 @@
 import pwm.work.epic_history as epic_history_module
 from pwm.work.create_issue import (
+    _resolve_epic_query_to_key,
     build_non_interactive_issue_details,
     parse_custom_field_values,
     record_epic_in_history,
@@ -148,3 +149,34 @@ def test_record_epic_in_history_dedupes_and_updates_latest(monkeypatch, tmp_path
     data = epic_history_module.load_epic_history()
     assert len(data) == 2
     assert data[0]["key"] == "ABC-1"
+
+
+def test_resolve_epic_query_accepts_completion_label():
+    history = [
+        {
+            "key": "ALLI-25002",
+            "title": "add redshift infra repo",
+            "project_key": "ALLI",
+        }
+    ]
+
+    resolved = _resolve_epic_query_to_key(
+        "ALLI-25002 add redshift infra repo",
+        history,
+    )
+
+    assert resolved == "ALLI-25002"
+
+
+def test_resolve_epic_query_accepts_partial_unique_title():
+    history = [
+        {
+            "key": "ALLI-25002",
+            "title": "add redshift infra repo",
+            "project_key": "ALLI",
+        }
+    ]
+
+    resolved = _resolve_epic_query_to_key("redshif", history)
+
+    assert resolved == "ALLI-25002"

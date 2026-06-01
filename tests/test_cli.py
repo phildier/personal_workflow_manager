@@ -34,6 +34,25 @@ def test_ws_no_args_shows_command_help_without_error(monkeypatch):
     assert not called
 
 
+def test_ic_no_args_shows_command_help_without_error(monkeypatch):
+    called = False
+
+    def fake_issue_create(**kwargs):
+        nonlocal called
+        called = True
+        return 0
+
+    monkeypatch.setattr("pwm.cli.issue_create", fake_issue_create)
+
+    result = runner.invoke(app, ["ic"])
+
+    assert result.exit_code == 0
+    assert "Usage:" in result.stdout
+    assert "ic" in result.stdout
+    assert "--summary" in result.stdout
+    assert not called
+
+
 def test_daily_summary_since_date_defaults_to_midnight(monkeypatch):
     captured_since = None
 
@@ -134,6 +153,72 @@ def test_ws_non_interactive_new_passes_args(monkeypatch):
     assert logged
     assert logged[0]["command"] == "ws"
     assert logged[0]["details"]["status"] == "success"
+
+
+def test_ic_non_interactive_passes_args(monkeypatch):
+    captured = {}
+    logged = []
+
+    def fake_issue_create(**kwargs):
+        nonlocal captured
+        captured = kwargs
+        return 0
+
+    monkeypatch.setattr("pwm.cli.issue_create", fake_issue_create)
+    monkeypatch.setattr(
+        "pwm.cli.append_event",
+        lambda command, args, details: logged.append(
+            {"command": command, "args": args, "details": details}
+        ),
+    )
+
+    result = runner.invoke(
+        app,
+        [
+            "ic",
+            "--non-interactive",
+            "--summary",
+            "CLI created issue",
+            "--description",
+            "Desc",
+            "--issue-type",
+            "Task",
+            "--labels",
+            "backend,api",
+            "--story-points",
+            "5",
+            "--epic",
+            "ABC-999",
+            "--custom-field",
+            "customfield_123=value",
+            "--save-defaults",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert captured["non_interactive"] is True
+    assert captured["summary"] == "CLI created issue"
+    assert captured["description"] == "Desc"
+    assert captured["issue_type"] == "Task"
+    assert captured["labels"] == ["backend", "api"]
+    assert captured["story_points"] == 5.0
+    assert captured["epic"] == "ABC-999"
+    assert captured["custom_fields"] == {"customfield_123": "value"}
+    assert captured["save_defaults"] is True
+    assert logged
+    assert logged[0]["command"] == "ic"
+    assert logged[0]["details"]["status"] == "success"
+
+
+def test_ic_rejects_conflicting_save_default_flags(monkeypatch):
+    monkeypatch.setattr("pwm.cli.issue_create", lambda **kwargs: 0)
+
+    result = runner.invoke(
+        app,
+        ["ic", "--save-defaults", "--no-save-defaults"],
+    )
+
+    assert result.exit_code == 2
 
 
 def test_ws_rejects_conflicting_save_default_flags(monkeypatch):

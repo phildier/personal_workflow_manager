@@ -72,6 +72,12 @@ pwm work-start ABC-123 --no-transition --no-comment
 pwm ws --new --non-interactive --summary "Fix API bug" --issue-type Bug --epic ABC-100
 ```
 
+**Create Jira issue only (no branch changes)**
+```bash
+pwm issue-create --non-interactive --summary "Implement X" --issue-type Task
+pwm ic --non-interactive --summary "Fix API bug" --issue-type Bug --epic ABC-100
+```
+
 **Open or create a pull request**
 ```bash
 pwm pr

@@ -1,6 +1,7 @@
 from __future__ import annotations
 import json
 from pathlib import Path
+import re
 from typing import Optional
 from rich.prompt import Prompt, Confirm
 from rich import print as rprint
@@ -19,6 +20,7 @@ STANDARD_CREATE_FIELDS = {
 }
 
 PARENT_COMPATIBLE_ISSUE_TYPES = {"story", "bug", "spike", "task", "incident"}
+ISSUE_KEY_PATTERN = re.compile(r"^[A-Z][A-Z0-9]*-\d+$")
 
 
 def _is_parent_compatible_issue_type(issue_type: str) -> bool:
@@ -29,6 +31,65 @@ def _is_parent_compatible_issue_type(issue_type: str) -> bool:
 def record_epic_in_history(epic_key: str, title: str, project_key: str) -> None:
     """Store or refresh an epic entry in history."""
     upsert_epic_history(epic_key, title, project_key)
+
+
+def _resolve_epic_query_to_key(query: str, history: list[dict]) -> Optional[str]:
+    """Resolve user query into a cached epic key when possible."""
+    normalized = query.strip()
+    if not normalized:
+        return None
+
+    normalized_upper = normalized.upper()
+
+    # Exact key match.
+    for entry in history:
+        key = str(entry.get("key", "")).strip()
+        if key and normalized_upper == key.upper():
+            return key
+
+    # Accept completion payloads in the format: "ABC-123 epic title".
+    first_token = normalized.split(" ", 1)[0].strip().upper()
+    if ISSUE_KEY_PATTERN.match(first_token):
+        for entry in history:
+            key = str(entry.get("key", "")).strip()
+            if key and first_token == key.upper():
+                return key
+
+    # Exact title match.
+    exact_title_matches = []
+    normalized_lower = normalized.lower()
+    for entry in history:
+        title = str(entry.get("title", "")).strip()
+        if title and normalized_lower == title.lower():
+            exact_title_matches.append(entry)
+
+    if len(exact_title_matches) == 1:
+        return str(exact_title_matches[0].get("key", "")).strip() or None
+
+    # Unique fuzzy match on key/title substring.
+    fuzzy_matches = [
+        entry
+        for entry in history
+        if normalized_lower in str(entry.get("key", "")).lower()
+        or normalized_lower in str(entry.get("title", "")).lower()
+    ]
+    if len(fuzzy_matches) == 1:
+        return str(fuzzy_matches[0].get("key", "")).strip() or None
+
+    return None
+
+
+def _epic_label_for_key(epic_key: str, history: list[dict]) -> str:
+    """Return human-readable label for selected epic key."""
+    key_upper = epic_key.strip().upper()
+    for entry in history:
+        key = str(entry.get("key", "")).strip()
+        title = str(entry.get("title", "")).strip()
+        if key and key.upper() == key_upper:
+            if title:
+                return f"{key} ({title})"
+            return key
+    return epic_key
 
 
 def _prompt_for_parent_epic(
@@ -74,11 +135,19 @@ def _prompt_for_parent_epic(
         if not query:
             return None
         if default_parent_epic_key and query.lower() == "default":
+            rprint(
+                "[cyan]Selected parent epic:[/cyan] "
+                f"{_epic_label_for_key(default_parent_epic_key, history)}"
+            )
             return default_parent_epic_key
 
-        for entry in history:
-            if query.upper() == entry["key"].upper():
-                return entry["key"]
+        resolved_key = _resolve_epic_query_to_key(query, history)
+        if resolved_key:
+            rprint(
+                "[cyan]Selected parent epic:[/cyan] "
+                f"{_epic_label_for_key(resolved_key, history)}"
+            )
+            return resolved_key
 
         query_lower = query.lower()
         matches = [
@@ -87,8 +156,6 @@ def _prompt_for_parent_epic(
             if query_lower in entry["key"].lower()
             or query_lower in entry["title"].lower()
         ]
-        if len(matches) == 1:
-            return matches[0]["key"]
 
         if len(matches) > 1:
             preview = ", ".join(

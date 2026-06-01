@@ -134,6 +134,29 @@ pwm ws --new --non-interactive --summary "Fix API bug" --issue-type Bug --epic A
 
 Note: `--new` requires Jira to be configured. See Configuration section above.
 
+### pwm issue-create (alias: ic)
+Create a Jira issue without creating or switching git branches.
+
+Use this when you want to queue or prepare Jira work items first, then start
+branch work later with `pwm work-start`.
+
+**Examples:**
+```bash
+pwm ic --non-interactive --summary "Implement X" --issue-type Task
+pwm issue-create --non-interactive --summary "Fix API bug" --issue-type Bug --epic ABC-100
+```
+
+**Options:**
+- `--non-interactive`: Fail instead of prompting for missing values
+- `--summary`: Required with `--non-interactive`
+- `--description`: Optional issue description
+- `--issue-type`: Issue type override
+- `--labels`: Comma-separated labels
+- `--story-points`: Numeric story points
+- `--epic`: Parent epic key (Story, Bug, Spike, Task, Incident)
+- `--custom-field KEY=VALUE`: Repeatable custom field values (VALUE may be JSON)
+- `--save-defaults` / `--no-save-defaults`: Control default persistence without prompts
+
 ### pwm epic-history
 Inspect or clear the local epic history cache (`~/.config/pwm/epic_history.json`).
 

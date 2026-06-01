@@ -15,6 +15,27 @@
   - `pwm ws --new --non-interactive --summary "Implement feature X"`
 - Full new issue command:
   - `pwm ws --new --non-interactive --summary "Implement feature X" --description "Details" --issue-type Task --labels backend,api --story-points 3 --custom-field customfield_10370='{"value":"Platform Team"}' --save-defaults`
+- New issue with explicit parent epic:
+  - `pwm ws --new --non-interactive --summary "Fix API bug" --issue-type Bug --epic ABC-100`
+
+Epic parent behavior:
+- `--epic` sets parent epic in non-interactive mode.
+- Supported issue types: Story, Bug, Spike, Task, Incident.
+- For other issue types, `--epic` is ignored.
+
+## Non-Interactive Issue Create
+
+- Minimum issue-create command:
+  - `pwm ic --non-interactive --summary "Implement feature X" --issue-type Task`
+- Issue-create with parent epic:
+  - `pwm ic --non-interactive --summary "Fix API bug" --issue-type Bug --epic ABC-100`
+
+Issue-create behavior:
+- `pwm ic` creates Jira issues only (no git branch changes).
+- It does not transition issues or add start-work comments.
+- Supports the same issue field flags as `pwm ws --new` (`--description`,
+  `--labels`, `--story-points`, `--custom-field`, `--save-defaults`,
+  `--no-save-defaults`).
 
 ## Non-Interactive PR
 
@@ -65,6 +86,7 @@ Next step: pwm pr --non-interactive --no-open-browser
 
 ## Command Logging
 
-- `pwm ws` and `pwm pr` events are logged to `~/.config/pwm/log.jsonl`.
+- `pwm ws`, `pwm ic`, and `pwm pr` events are logged to
+  `~/.config/pwm/log.jsonl`.
 - Logs include timestamp, command, normalized args, and details such as repo,
   branch, issue key, and PR URL when available.
