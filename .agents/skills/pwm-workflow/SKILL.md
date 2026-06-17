@@ -13,7 +13,8 @@ metadata:
 
 ## Purpose
 
-Execute reliable, non-interactive `pwm ic`, `pwm ws`, and `pwm pr` workflows.
+Execute reliable, non-interactive `pwm ws`, `pwm ic`, and `pwm pr` workflows
+with a default bias toward a single issue/branch/PR flow.
 
 ## Use This Skill When
 
@@ -27,18 +28,30 @@ Execute reliable, non-interactive `pwm ic`, `pwm ws`, and `pwm pr` workflows.
 - Confirm you are in the target git repository.
 - Confirm `pwm` is installed and available on `PATH`.
 
+## Command Selection Policy
+
+- Prefer `pwm ws --new` for standard new work so one command creates the issue
+  and starts branch work.
+- Use `pwm ic` only when issue-only creation is intentionally required, such as:
+  dirty working tree, current branch should not change, or branch switching
+  would conflict with existing local files.
+- After creating an issue with `pwm ic`, reuse that same issue key with
+  `pwm ws <ISSUE-KEY>` instead of creating another issue.
+- Keep one task to one ticket and one PR unless the user explicitly requests
+  splitting work.
+
 ## Core Non-Interactive Commands
 
-- Create Jira issue only (no branch changes):
-  - `pwm ic --non-interactive --summary "Implement feature X" --issue-type Task`
-- Create Jira issue only with parent epic:
-  - `pwm ic --non-interactive --summary "Fix API bug" --issue-type Bug --epic ABC-100`
 - Create and start a new Jira issue:
   - `pwm ws --new --non-interactive --summary "Implement feature X"`
 - Create and start a new Jira issue with parent epic:
   - `pwm ws --new --non-interactive --summary "Implement feature X" --issue-type Task --epic ABC-100`
 - Start existing Jira issue:
   - `pwm ws ABC-123 --no-transition --no-comment`
+- Create Jira issue only (no branch changes, exception path):
+  - `pwm ic --non-interactive --summary "Implement feature X" --issue-type Task`
+- Create Jira issue only with parent epic (exception path):
+  - `pwm ic --non-interactive --summary "Fix API bug" --issue-type Bug --epic ABC-100`
 - Create/open PR without interactive confirms or browser launch:
   - `pwm pr --non-interactive --create-anyway --no-open-browser`
 - Create/open PR and apply labels (repeat `--label` as needed):

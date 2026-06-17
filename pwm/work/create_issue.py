@@ -223,7 +223,13 @@ def build_non_interactive_issue_details(
                 "ignoring --story-points.[/yellow]"
             )
 
-    missing_required_fields: list[str] = []
+    _populate_reporter_field_if_needed(
+        jira=jira,
+        metadata=metadata,
+        custom_fields=resolved_custom_fields,
+    )
+
+    missing_required_fields: list[tuple[str, str, str]] = []
     for field_id, field_info in metadata.items():
         if field_id in STANDARD_CREATE_FIELDS:
             continue
@@ -231,13 +237,28 @@ def build_non_interactive_issue_details(
             continue
         if field_id not in resolved_custom_fields:
             field_name = field_info.get("name", field_id)
-            missing_required_fields.append(field_name)
+            missing_required_fields.append(
+                (
+                    field_name,
+                    field_id,
+                    _required_field_cli_example(field_id, field_info),
+                )
+            )
 
     if missing_required_fields:
-        joined = ", ".join(sorted(missing_required_fields))
+        details = "\n".join(
+            sorted(
+                [
+                    "- "
+                    f"{field_name} ({field_id}): "
+                    f"--custom-field '{example}'"
+                    for field_name, field_id, example in missing_required_fields
+                ]
+            )
+        )
         rprint(
             "[red]Error: Missing required Jira fields for non-interactive "
-            f"issue creation: {joined}[/red]"
+            f"issue creation:\n{details}[/red]"
         )
         return None
 
@@ -275,6 +296,47 @@ def parse_custom_field_values(custom_field_pairs: Optional[list[str]]) -> dict:
             parsed[key] = raw
 
     return parsed
+
+
+def _populate_reporter_field_if_needed(
+    jira: JiraClient,
+    metadata: dict,
+    custom_fields: dict,
+) -> None:
+    """Populate Jira reporter with current account when available."""
+    if "reporter" not in metadata:
+        return
+
+    existing_reporter = custom_fields.get("reporter")
+    if existing_reporter:
+        return
+
+    resolver = getattr(jira, "get_current_account_id", None)
+    if not callable(resolver):
+        return
+
+    account_id = resolver()
+    if account_id:
+        custom_fields["reporter"] = {"accountId": account_id}
+
+
+def _required_field_cli_example(field_id: str, field_info: dict) -> str:
+    """Return an example CLI shape for a required field value."""
+    if field_id == "reporter":
+        return 'reporter={"accountId":"<jira-account-id>"}'
+
+    schema = field_info.get("schema", {})
+    field_type = schema.get("type", "")
+    if field_type == "option":
+        return f'{field_id}={{"value":"<option>"}}'
+    if field_type == "array" and schema.get("items") == "option":
+        return f'{field_id}=[{{"value":"<option>"}}]'
+    if field_type == "number":
+        return f"{field_id}=1"
+    if field_type == "string":
+        return f'{field_id}="text"'
+
+    return f"{field_id}=<value>"
 
 
 def prompt_for_issue_details(
@@ -512,6 +574,12 @@ def prompt_for_issue_details(
                         "[yellow]You may need to update the issue manually in "
                         "Jira.[/yellow]"
                     )
+
+        _populate_reporter_field_if_needed(
+            jira=jira,
+            metadata=metadata,
+            custom_fields=custom_fields,
+        )
 
     return {
         "summary": summary,

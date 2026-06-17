@@ -18,6 +18,13 @@
 - New issue with explicit parent epic:
   - `pwm ws --new --non-interactive --summary "Fix API bug" --issue-type Bug --epic ABC-100`
 
+Command selection guidance:
+- Default path for new work: `pwm ws --new ...` (single issue + branch start).
+- Use `pwm ic ...` only when issue-only creation is required and branch changes
+  should be deferred.
+- If `pwm ic` was used, continue with `pwm ws ISSUE-KEY` for that same issue;
+  do not create a second issue for the same task.
+
 Epic parent behavior:
 - `--epic` sets parent epic in non-interactive mode.
 - Supported issue types: Story, Bug, Spike, Task, Incident.
@@ -36,6 +43,8 @@ Issue-create behavior:
 - Supports the same issue field flags as `pwm ws --new` (`--description`,
   `--labels`, `--story-points`, `--custom-field`, `--save-defaults`,
   `--no-save-defaults`).
+- This is an exception path; prefer `pwm ws --new` unless issue-only creation is
+  explicitly needed.
 
 ## Non-Interactive PR
 

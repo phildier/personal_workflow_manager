@@ -98,6 +98,91 @@ def test_build_non_interactive_issue_details_fails_on_missing_required_fields():
     assert details is None
 
 
+def test_build_non_interactive_issue_details_auto_populates_reporter():
+    class FakeJira:
+        def get_create_metadata(self, _project_key, _issue_type):
+            return {
+                "reporter": {
+                    "name": "Reporter",
+                    "required": True,
+                    "schema": {"type": "user"},
+                }
+            }
+
+        def get_current_account_id(self):
+            return "acct-123"
+
+    details = build_non_interactive_issue_details(
+        jira=FakeJira(),
+        project_key="ABC",
+        config={"jira": {"issue_defaults": {}}},
+        summary="Auto reporter",
+    )
+
+    assert details is not None
+    assert details["custom_fields"]["reporter"] == {"accountId": "acct-123"}
+
+
+def test_build_non_interactive_issue_details_preserves_reporter_override():
+    class FakeJira:
+        def get_create_metadata(self, _project_key, _issue_type):
+            return {
+                "reporter": {
+                    "name": "Reporter",
+                    "required": True,
+                    "schema": {"type": "user"},
+                }
+            }
+
+        def get_current_account_id(self):
+            return "acct-123"
+
+    details = build_non_interactive_issue_details(
+        jira=FakeJira(),
+        project_key="ABC",
+        config={"jira": {"issue_defaults": {}}},
+        summary="Reporter override",
+        custom_fields={"reporter": {"accountId": "acct-manual"}},
+    )
+
+    assert details is not None
+    assert details["custom_fields"]["reporter"] == {"accountId": "acct-manual"}
+
+
+def test_build_non_interactive_issue_details_error_includes_field_keys_and_shapes(capsys):
+    class FakeJira:
+        def get_create_metadata(self, _project_key, _issue_type):
+            return {
+                "reporter": {
+                    "name": "Reporter",
+                    "required": True,
+                    "schema": {"type": "user"},
+                },
+                "customfield_10370": {
+                    "name": "Responsible Team",
+                    "required": True,
+                    "schema": {"type": "option"},
+                },
+            }
+
+        def get_current_account_id(self):
+            return None
+
+    details = build_non_interactive_issue_details(
+        jira=FakeJira(),
+        project_key="ABC",
+        config={"jira": {"issue_defaults": {}}},
+        summary="Missing required fields",
+    )
+
+    captured = capsys.readouterr()
+    assert details is None
+    assert "Reporter (reporter)" in captured.out
+    assert 'reporter={"accountId":"<jira-account-id>"}' in captured.out
+    assert "Responsible Team (customfield_10370)" in captured.out
+    assert 'customfield_10370={"value":"<option>"}' in captured.out
+
+
 def test_build_non_interactive_issue_details_includes_parent_epic_for_task():
     class FakeJira:
         def get_create_metadata(self, _project_key, _issue_type):
