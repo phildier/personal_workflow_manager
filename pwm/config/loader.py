@@ -24,14 +24,16 @@ def _deep_merge(a: Dict[str, Any], b: Dict[str, Any]) -> Dict[str, Any]:
             out[k] = v
     return out
 
-def load_merged_config(repo_root: Path):
+def load_merged_config(repo_root: Path | None):
     base = PWMConfig().as_dict()
     user_cfg, project_cfg = {}, {}
 
     if USER_CONFIG_PATH.exists():
         user_cfg = _load_toml(USER_CONFIG_PATH)
-    project_cfg_path = repo_root / PROJECT_CONFIG_BASENAME
-    if project_cfg_path.exists():
+    project_cfg_path = (
+        repo_root / PROJECT_CONFIG_BASENAME if repo_root is not None else None
+    )
+    if project_cfg_path is not None and project_cfg_path.exists():
         project_cfg = _load_toml(project_cfg_path)
 
     merged = _deep_merge(base, user_cfg)
@@ -52,7 +54,11 @@ def load_merged_config(repo_root: Path):
     merged = _deep_merge(merged, env_overrides)
     meta = ContextMeta(
         user_config_path=USER_CONFIG_PATH if USER_CONFIG_PATH.exists() else None,
-        project_config_path=project_cfg_path if project_cfg_path.exists() else None,
+        project_config_path=(
+            project_cfg_path
+            if project_cfg_path is not None and project_cfg_path.exists()
+            else None
+        ),
         source_summary="+".join(filter(None, ["user" if user_cfg else None, "project" if project_cfg else None, "env" if env_overrides else None])) or "defaults",
     )
     return merged, meta

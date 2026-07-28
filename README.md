@@ -35,6 +35,22 @@ Requires Python 3.11 or newer.
 
 ----------------------------------------
 
+## Agent Workflow Skill
+
+The repo-local skill at `.agents/skills/pwm-workflow/SKILL.md` is the source
+of truth for agent guidance on non-interactive `pwm` workflows. If a user-home
+copy exists at `~/.agents/skills/pwm-workflow/SKILL.md`, keep it synchronized
+from this repo source after changing the skill:
+
+```bash
+cp .agents/skills/pwm-workflow/SKILL.md ~/.agents/skills/pwm-workflow/SKILL.md
+```
+
+Update the repo source first; the user-home skill should flow from it, not the
+other way around.
+
+----------------------------------------
+
 ## Configuration
 
 Global config: `~/.config/pwm/config.toml`
@@ -144,6 +160,7 @@ branch work later with `pwm work-start`.
 ```bash
 pwm ic --non-interactive --summary "Implement X" --issue-type Task
 pwm issue-create --non-interactive --summary "Fix API bug" --issue-type Bug --epic ABC-100
+pwm ic --non-interactive --summary "Create feature area" --issue-type Epic --no-save-defaults
 ```
 
 **Options:**

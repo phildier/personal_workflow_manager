@@ -7,7 +7,7 @@ import os
 import sys
 from rich import print as rprint
 
-from pwm.context.resolver import resolve_context
+from pwm.context.resolver import resolve_service_context
 from pwm.summary.business_days import get_previous_business_day
 from pwm.summary.collector import collect_work_data
 from pwm.summary.formatter import format_markdown, format_text
@@ -44,13 +44,11 @@ def daily_summary(
         0 on success, 1 on error
     """
     try:
-        ctx = resolve_context()
+        ctx = resolve_service_context()
     except RuntimeError as e:
-        _debug(f"resolve_context failed: {type(e).__name__}")
+        _debug(f"resolve_service_context failed: {type(e).__name__}")
         rprint(f"[red]Error:[/red] {e}")
         return 1
-
-    repo_root = ctx.repo_root
 
     # Determine start time
     if since is None:

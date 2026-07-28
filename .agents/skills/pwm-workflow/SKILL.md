@@ -35,6 +35,9 @@ with a default bias toward a single issue/branch/PR flow.
 - Use `pwm ic` only when issue-only creation is intentionally required, such as:
   dirty working tree, current branch should not change, or branch switching
   would conflict with existing local files.
+- When the user asks to create an epic, use `pwm ic` with `--issue-type Epic`;
+  do not use `--epic`, because epics are parent containers rather than children
+  of another epic.
 - After creating an issue with `pwm ic`, reuse that same issue key with
   `pwm ws <ISSUE-KEY>` instead of creating another issue.
 - Keep one task to one ticket and one PR unless the user explicitly requests
@@ -52,6 +55,8 @@ with a default bias toward a single issue/branch/PR flow.
   - `pwm ic --non-interactive --summary "Implement feature X" --issue-type Task`
 - Create Jira issue only with parent epic (exception path):
   - `pwm ic --non-interactive --summary "Fix API bug" --issue-type Bug --epic ABC-100`
+- Create Jira epic only:
+  - `pwm ic --non-interactive --summary "Create feature area" --issue-type Epic --no-save-defaults`
 - Create/open PR without interactive confirms or browser launch:
   - `pwm pr --non-interactive --create-anyway --no-open-browser`
 - Create/open PR and apply labels (repeat `--label` as needed):
@@ -65,6 +70,7 @@ with a default bias toward a single issue/branch/PR flow.
   `--custom-field KEY=VALUE` when project defaults are insufficient.
 - Use `--epic ABC-123` to set parent epic for supported issue types:
   Story, Bug, Spike, Task, Incident.
+- Use `--issue-type Epic` to create an epic. Do not combine it with `--epic`.
 - Use `--save-defaults` or `--no-save-defaults` to avoid default-save prompts.
 - `pwm ic` creates Jira issues only. It does not switch branches, transition
   issues, or post start-work comments.

@@ -21,6 +21,19 @@ class Context:
         slug = slugify(summary or issue_key)
         return pattern.format(issue_key=issue_key, slug=slug)
 
+
+@dataclass
+class ServiceContext:
+    config: dict
+    github_repo: str | None
+    jira_project_key: str | None
+    meta: ContextMeta
+
+
+class NotGitRepositoryError(RuntimeError):
+    """Raised when repository context is required but unavailable."""
+
+
 def resolve_context(cwd: Path | None = None) -> Context:
     cwd = cwd or Path.cwd()
     repo_root = find_git_root(cwd)
@@ -29,12 +42,28 @@ def resolve_context(cwd: Path | None = None) -> Context:
     jira_project_key = config.get("jira", {}).get("project_key") or None
     return Context(repo_root=repo_root, config=config, github_repo=github_repo, jira_project_key=jira_project_key, meta=meta)
 
+
+def resolve_service_context(
+    cwd: Path | None = None,
+) -> Context | ServiceContext:
+    cwd = cwd or Path.cwd()
+    try:
+        return resolve_context(cwd)
+    except NotGitRepositoryError:
+        config, meta = load_merged_config(None)
+    return ServiceContext(
+        config=config,
+        github_repo=config.get("github", {}).get("repo"),
+        jira_project_key=config.get("jira", {}).get("project_key") or None,
+        meta=meta,
+    )
+
 def find_git_root(start: Path) -> Path:
     p = start.resolve()
     for parent in [p] + list(p.parents):
         if (parent / ".git").exists():
             return parent
-    raise RuntimeError(f"Not inside a git repository: {start}")
+    raise NotGitRepositoryError(f"Not inside a git repository: {start}")
 
 def infer_github_repo(repo_root: Path, config: dict) -> str | None:
     explicit = config.get("github", {}).get("repo")

@@ -36,10 +36,13 @@ def test_work_end_emits_debug_when_not_on_branch(monkeypatch, capsys):
 def test_daily_summary_emits_debug_when_context_fails(monkeypatch, capsys):
     monkeypatch.setenv("PWM_DEBUG", "1")
     monkeypatch.setattr(
-        "pwm.summary.command.resolve_context",
-        lambda: (_ for _ in ()).throw(RuntimeError("not in repo")),
+        "pwm.summary.command.resolve_service_context",
+        lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("config failed")),
     )
 
     assert daily_summary() == 1
     captured = capsys.readouterr()
-    assert "[DEBUG] summary.command: resolve_context failed: RuntimeError" in captured.err
+    assert (
+        "[DEBUG] summary.command: resolve_service_context failed: RuntimeError"
+        in captured.err
+    )
