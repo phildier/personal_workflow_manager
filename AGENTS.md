@@ -81,6 +81,8 @@ pwm ic --non-interactive --summary "Fix API bug" --issue-type Bug --epic ABC-100
 **Open or create a pull request**
 ```bash
 pwm pr
+pwm pr --preflight --non-interactive --label ai-assisted
+pwm pr --non-interactive --no-open-browser --label ai-assisted
 pwm pr --label bug --label ai-assisted
 ```
 

@@ -199,3 +199,53 @@ def test_work_start_errors_with_neither_new_nor_issue_key(monkeypatch, tmp_path)
 
     rc = ws.work_start()
     assert rc == 1
+
+
+def test_work_start_preserves_actionable_creation_error(monkeypatch, tmp_path):
+    monkeypatch.setattr(ws, "current_branch", lambda repo_root: None)
+
+    class FakeJira:
+        def get_issue_summary(self, key):
+            return "Test"
+
+    monkeypatch.setattr(
+        jira_client_module.JiraClient,
+        "from_config",
+        classmethod(lambda cls, cfg: FakeJira()),
+    )
+
+    def fake_create_issue(*args, **kwargs):
+        details = kwargs.get("creation_details")
+        if isinstance(details, dict):
+            details["error"] = "Failed to create issue: reporter is required"
+        return None
+
+    monkeypatch.setattr(ws, "create_new_issue", fake_create_issue)
+
+    repo_root = tmp_path
+    (repo_root / ".git").mkdir()
+    config = {"jira": {"issue_defaults": {}}}
+    meta = ContextMeta(
+        user_config_path=None,
+        project_config_path=None,
+        source_summary="defaults",
+    )
+    fake_ctx = Context(
+        repo_root=repo_root,
+        config=config,
+        github_repo="org/repo",
+        jira_project_key="TEST",
+        meta=meta,
+    )
+    monkeypatch.setattr(ws, "resolve_context", lambda: fake_ctx)
+
+    details = {}
+    rc = ws.work_start(
+        create_new=True,
+        non_interactive=True,
+        summary="Create issue",
+        event_details=details,
+    )
+
+    assert rc == 1
+    assert details["error"] == "Failed to create issue: reporter is required"

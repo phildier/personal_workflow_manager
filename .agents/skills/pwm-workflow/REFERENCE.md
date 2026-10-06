@@ -24,6 +24,8 @@ Command selection guidance:
   should be deferred.
 - If `pwm ic` was used, continue with `pwm ws ISSUE-KEY` for that same issue;
   do not create a second issue for the same task.
+- `pwm ws --new` and `pwm ic` auto-load matching non-secret defaults from
+  `~/.config/pwm/agent-defaults.toml` (project/repository keyed).
 
 Epic parent behavior:
 - `--epic` sets parent epic in non-interactive mode.
@@ -49,7 +51,9 @@ Issue-create behavior:
 ## Non-Interactive PR
 
 - Safe automation mode:
-  - `pwm pr --non-interactive --no-open-browser`
+  - `pwm pr --non-interactive --no-open-browser --label ai-assisted`
+- Read-only diagnostics mode:
+  - `pwm pr --preflight --non-interactive --label ai-assisted`
 - Force creation when branch has no commits ahead of base:
   - `pwm pr --non-interactive --create-anyway --no-open-browser`
 - Optional title/body override:
@@ -63,6 +67,15 @@ Label behavior:
 - Labels are only added when `--label` is provided.
 - Labels are applied to both existing PRs and newly created PRs.
 - Duplicate/blank label values are normalized before being sent.
+
+PR execution policy:
+- When asked to create/open a PR, complete the PR in the same turn after any
+  needed checks/commit/push.
+- Do not request confirmation unless the user explicitly asked for diff review
+  before PR creation or a command failed.
+- Use `--create-anyway` only for intentionally no-ahead-commit PRs.
+- Inspect `.git/pwm/pr.json` before rerunning `pwm pr`; rerun only when HEAD or
+  requested metadata changed.
 
 ## Label Decision Rules
 
@@ -90,8 +103,14 @@ Label behavior:
 Action run: pwm ws --new --non-interactive --summary "Implement feature X"
 Outcome: Created issue ABC-123 and switched to branch ABC-123-implement-feature-x.
 Notes: Jira transition/comment skipped by flags.
-Next step: pwm pr --non-interactive --no-open-browser
+Next step: pwm pr --non-interactive --no-open-browser  # only for requested end-to-end flows
 ```
+
+Output contract:
+- Success after `pwm pr`: report PR URL + validation status, no `Next step`.
+- Success after `pwm ws`/`pwm ic`: include `Next step` only when explicitly
+  asked for end-to-end workflow execution.
+- Failure: include exactly one corrective `Next step` command.
 
 ## Command Logging
 

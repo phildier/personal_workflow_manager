@@ -1,5 +1,8 @@
 from __future__ import annotations
+import json
+from datetime import datetime, timezone
 from pathlib import Path
+import subprocess
 import webbrowser
 import os
 import sys
@@ -18,6 +21,7 @@ from pwm.vcs.git_cli import (
 from pwm.github.client import GitHubClient
 from pwm.prompt.command import extract_issue_key_from_branch
 from pwm.jira.client import JiraClient
+from pwm.vcs.remote_url import parse_repo_from_remote_url
 
 if TYPE_CHECKING:
     from pwm.ai.summarizer import SupportsCompletion
@@ -43,6 +47,421 @@ def _normalize_labels(labels: Optional[list[str]]) -> list[str]:
         seen_labels.add(stripped_label)
         normalized.append(stripped_label)
     return normalized
+
+
+def _run_git(repo_root: Path, args: list[str]) -> subprocess.CompletedProcess[str]:
+    """Run a git command and return its completed process result."""
+    return subprocess.run(
+        ["git", "-C", str(repo_root), *args],
+        capture_output=True,
+        text=True,
+    )
+
+
+def _git_stdout(repo_root: Path, args: list[str]) -> Optional[str]:
+    """Return stripped stdout for a successful git command."""
+    result = _run_git(repo_root, args)
+    if result.returncode != 0:
+        return None
+    value = result.stdout.strip()
+    return value or None
+
+
+def _get_remote_url(repo_root: Path, remote: str) -> Optional[str]:
+    """Return the URL for a git remote when available."""
+    return _git_stdout(repo_root, ["remote", "get-url", remote])
+
+
+def _list_remotes(repo_root: Path) -> list[str]:
+    """Return configured remote names for the repository."""
+    remotes = _git_stdout(repo_root, ["remote"])
+    if not remotes:
+        return []
+    return [name.strip() for name in remotes.splitlines() if name.strip()]
+
+
+def _get_upstream_ref(repo_root: Path) -> Optional[str]:
+    """Return upstream tracking ref for current branch (for example origin/feat)."""
+    return _git_stdout(repo_root, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
+
+
+def _push_viability(repo_root: Path, remote: str, branch: str) -> tuple[bool, str]:
+    """Check whether pushing branch is likely to succeed using dry-run push."""
+    result = _run_git(repo_root, ["push", "--dry-run", remote, f"HEAD:{branch}"])
+    if result.returncode == 0:
+        return True, "ok"
+
+    stderr = (result.stderr or "").strip()
+    stdout = (result.stdout or "").strip()
+    detail = stderr or stdout or "git push --dry-run failed"
+    return False, detail
+
+
+def _changed_files_since_base(repo_root: Path, base_branch_ref: str) -> list[str]:
+    """Return changed files compared to base...HEAD."""
+    output = _git_stdout(repo_root, ["diff", "--name-only", f"{base_branch_ref}...HEAD"])
+    if not output:
+        return []
+    return [line for line in output.splitlines() if line]
+
+
+def _head_sha(repo_root: Path) -> Optional[str]:
+    """Return HEAD commit SHA for current worktree."""
+    return _git_stdout(repo_root, ["rev-parse", "HEAD"])
+
+
+def _git_dir(repo_root: Path) -> Optional[Path]:
+    """Resolve the worktree git dir path even when .git is a file."""
+    raw = _git_stdout(repo_root, ["rev-parse", "--git-dir"])
+    if not raw:
+        return None
+    git_dir = Path(raw)
+    if git_dir.is_absolute():
+        return git_dir
+    return (repo_root / git_dir).resolve()
+
+
+def _receipt_path(repo_root: Path) -> Optional[Path]:
+    """Return per-worktree PR receipt path (.git/pwm/pr.json)."""
+    git_dir = _git_dir(repo_root)
+    if not git_dir:
+        return None
+    return git_dir / "pwm" / "pr.json"
+
+
+def _read_pr_receipt(repo_root: Path) -> Optional[dict]:
+    """Read PR receipt from per-worktree git metadata path."""
+    receipt_file = _receipt_path(repo_root)
+    if receipt_file is None or not receipt_file.exists():
+        return None
+
+    try:
+        data = json.loads(receipt_file.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+    if not isinstance(data, dict):
+        return None
+    return data
+
+
+def _write_pr_receipt(
+    repo_root: Path,
+    branch: str,
+    head_sha: Optional[str],
+    pr_url: str,
+    labels: list[str],
+) -> None:
+    """Persist PR discovery/creation receipt under per-worktree .git metadata."""
+    receipt_file = _receipt_path(repo_root)
+    if receipt_file is None:
+        return
+
+    receipt_file.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "version": 1,
+        "written_at": datetime.now(timezone.utc).isoformat(),
+        "branch": branch,
+        "head_sha": head_sha,
+        "pr_url": pr_url,
+        "labels": labels,
+    }
+    receipt_file.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def _extract_labels(pr: dict) -> list[str]:
+    """Extract label names from GitHub PR payload."""
+    raw_labels = pr.get("labels")
+    if not isinstance(raw_labels, list):
+        return []
+
+    labels: list[str] = []
+    for item in raw_labels:
+        if isinstance(item, dict):
+            name = item.get("name")
+            if isinstance(name, str) and name.strip():
+                labels.append(name.strip())
+    return _normalize_labels(labels)
+
+
+def _receipt_can_be_reused(
+    receipt: Optional[dict],
+    branch: str,
+    head_sha: Optional[str],
+    requested_labels: list[str],
+) -> bool:
+    """Return whether receipt still matches current branch/HEAD/metadata request."""
+    if not receipt:
+        return False
+
+    if receipt.get("branch") != branch:
+        return False
+
+    receipt_sha = receipt.get("head_sha")
+    if not isinstance(receipt_sha, str) or receipt_sha != head_sha:
+        return False
+
+    url = receipt.get("pr_url")
+    if not isinstance(url, str) or not url:
+        return False
+
+    if requested_labels:
+        existing = receipt.get("labels")
+        if not isinstance(existing, list):
+            return False
+        existing_set = {str(item).strip() for item in existing if str(item).strip()}
+        if not set(requested_labels).issubset(existing_set):
+            return False
+
+    return True
+
+
+def preflight_pr(
+    create_anyway: bool = False,
+    labels: Optional[list[str]] = None,
+    event_details: Optional[dict] = None,
+) -> dict:
+    """Collect machine-readable diagnostics for PR creation viability."""
+    ctx = resolve_context()
+    repo_root = ctx.repo_root
+    requested_labels = _normalize_labels(labels)
+    remote = ctx.config.get("git", {}).get("default_remote", "origin")
+
+    branch = current_branch(repo_root)
+    issue_key = extract_issue_key_from_branch(branch) if branch else None
+    upstream = _get_upstream_ref(repo_root) if branch else None
+    head_sha = _head_sha(repo_root)
+
+    remote_url = _get_remote_url(repo_root, remote)
+    remote_repo = parse_repo_from_remote_url(remote_url) if remote_url else None
+    resolved_repo = ctx.github_repo or remote_repo
+    configured_repo = ctx.config.get("github", {}).get("repo")
+
+    remote_repo_mismatch = False
+    mismatch_reason = None
+    matching_remote_for_configured_repo = None
+    if configured_repo and remote_repo and configured_repo != remote_repo:
+        remote_repo_mismatch = True
+        for candidate in _list_remotes(repo_root):
+            candidate_url = _get_remote_url(repo_root, candidate)
+            candidate_repo = (
+                parse_repo_from_remote_url(candidate_url) if candidate_url else None
+            )
+            if candidate_repo == configured_repo:
+                matching_remote_for_configured_repo = candidate
+                mismatch_reason = (
+                    f"Configured github.repo matches remote '{candidate}', "
+                    f"not '{remote}'."
+                )
+                break
+        if mismatch_reason is None:
+            mismatch_reason = (
+                "Configured github.repo differs from the selected git remote "
+                "repository."
+            )
+
+    base_branch_ref = get_default_branch(repo_root, remote)
+    base_branch = (
+        base_branch_ref.split("/")[-1]
+        if "/" in base_branch_ref
+        else base_branch_ref
+    )
+    commits = get_commits_since_base(repo_root, base_branch_ref, remote)
+    changed_files = _changed_files_since_base(repo_root, base_branch_ref)
+    commit_count = len(commits)
+    changed_file_count = len(changed_files)
+
+    push_viable, push_message = (False, "Not on a branch")
+    if branch:
+        push_viable, push_message = _push_viability(repo_root, remote, branch)
+
+    receipt = _read_pr_receipt(repo_root)
+    receipt_reusable = _receipt_can_be_reused(
+        receipt,
+        branch or "",
+        head_sha,
+        requested_labels,
+    )
+
+    existing_pr = {
+        "url": None,
+        "number": None,
+        "title": None,
+        "source": "none",
+    }
+    github_client = GitHubClient.from_config(ctx.config)
+
+    if receipt_reusable and receipt:
+        existing_pr["url"] = receipt.get("pr_url")
+        existing_pr["source"] = "receipt"
+    elif github_client and resolved_repo and branch:
+        remote_pr = github_client.get_pr_for_branch(resolved_repo, branch)
+        if remote_pr:
+            existing_pr = {
+                "url": remote_pr.get("html_url"),
+                "number": remote_pr.get("number"),
+                "title": remote_pr.get("title"),
+                "source": "github",
+            }
+
+    blocking_issues: list[dict[str, str]] = []
+
+    if not branch:
+        _debug("current_branch returned no branch")
+        blocking_issues.append(
+            {
+                "code": "not_on_branch",
+                "message": "Not on a git branch.",
+                "remediation": "Switch to a branch before running 'pwm pr'.",
+            }
+        )
+
+    if branch and not issue_key:
+        _debug(f"branch '{branch}' does not contain Jira issue key")
+        blocking_issues.append(
+            {
+                "code": "missing_issue_key",
+                "message": (
+                    f"Branch '{branch}' does not contain a Jira issue key."
+                ),
+                "remediation": (
+                    "Use 'pwm work-start ABC-123' or "
+                    "'pwm work-start --new' first."
+                ),
+            }
+        )
+
+    if not remote_url:
+        blocking_issues.append(
+            {
+                "code": "missing_remote",
+                "message": f"Git remote '{remote}' is not configured.",
+                "remediation": (
+                    f"Configure remote '{remote}' or set git.default_remote "
+                    "in config."
+                ),
+            }
+        )
+
+    if not resolved_repo:
+        blocking_issues.append(
+            {
+                "code": "missing_github_repo",
+                "message": "Unable to resolve GitHub repository.",
+                "remediation": (
+                    "Set [github].repo in .pwm.toml or fix the remote URL."
+                ),
+            }
+        )
+
+    if not github_client:
+        blocking_issues.append(
+            {
+                "code": "missing_github_credentials",
+                "message": "GitHub token is not configured.",
+                "remediation": "Set GITHUB_TOKEN or PWM_GITHUB_TOKEN.",
+            }
+        )
+
+    if branch and not push_viable:
+        blocking_issues.append(
+            {
+                "code": "push_not_viable",
+                "message": "Branch is not pushable to configured remote.",
+                "remediation": (
+                    f"Run 'git push -u {remote} {branch}' and resolve errors."
+                ),
+            }
+        )
+
+    if (
+        not create_anyway
+        and existing_pr.get("url") is None
+        and commit_count == 0
+        and changed_file_count == 0
+    ):
+        blocking_issues.append(
+            {
+                "code": "no_changes_ahead",
+                "message": "No commits or changed files ahead of base branch.",
+                "remediation": (
+                    "Create at least one commit before opening a PR, or rerun "
+                    "with --create-anyway for an intentional empty PR."
+                ),
+            }
+        )
+
+    warnings: list[dict[str, str]] = []
+    if remote_repo_mismatch:
+        warnings.append(
+            {
+                "code": "github_repo_mismatch",
+                "message": mismatch_reason or "GitHub repo mismatch detected.",
+            }
+        )
+
+    result = {
+        "ok": len(blocking_issues) == 0,
+        "create_anyway": create_anyway,
+        "repo_root": str(repo_root),
+        "remote": {
+            "name": remote,
+            "url": remote_url,
+            "exists": remote_url is not None,
+        },
+        "branch": {
+            "name": branch,
+            "issue_key": issue_key,
+            "has_issue_key": issue_key is not None,
+            "upstream": upstream,
+        },
+        "push": {
+            "viable": push_viable,
+            "detail": push_message,
+        },
+        "base_branch": {
+            "ref": base_branch_ref,
+            "name": base_branch,
+        },
+        "ahead": {
+            "commit_count": commit_count,
+            "commits": [
+                {
+                    "hash": commit.get("hash"),
+                    "subject": commit.get("subject"),
+                }
+                for commit in commits
+            ],
+            "changed_file_count": changed_file_count,
+            "changed_files": changed_files,
+        },
+        "existing_pr": existing_pr,
+        "github_repository": {
+            "configured_repo": configured_repo,
+            "resolved_repo": resolved_repo,
+            "remote_repo": remote_repo,
+            "remote_mismatch": remote_repo_mismatch,
+            "matching_remote_for_configured_repo": (
+                matching_remote_for_configured_repo
+            ),
+        },
+        "receipt": {
+            "path": str(_receipt_path(repo_root)) if _receipt_path(repo_root) else None,
+            "head_sha": head_sha,
+            "found": receipt is not None,
+            "reusable": receipt_reusable,
+        },
+        "blocking_issues": blocking_issues,
+        "warnings": warnings,
+    }
+
+    if event_details is not None:
+        event_details["preflight_ok"] = result["ok"]
+        event_details["preflight_blockers"] = [
+            issue["code"] for issue in blocking_issues
+        ]
+
+    return result
 
 
 def display_pr_info(
@@ -227,8 +646,25 @@ def open_pr(
 
     Returns 0 on success, 1 on error.
     """
+    preflight = preflight_pr(
+        create_anyway=create_anyway,
+        labels=labels,
+        event_details=event_details,
+    )
+
+    if not preflight["ok"]:
+        first_issue = preflight["blocking_issues"][0]
+        rprint(
+            f"[red]Preflight failed ({first_issue['code']}):[/red] "
+            f"{first_issue['message']}"
+        )
+        rprint(f"[cyan]Remediation:[/cyan] {first_issue['remediation']}")
+        if event_details is not None:
+            event_details["error"] = first_issue["message"]
+        return 1
+
     ctx = resolve_context()
-    repo_root = ctx.repo_root
+    repo_root = Path(preflight["repo_root"])
     normalized_labels = _normalize_labels(labels)
     if event_details is not None:
         event_details["repo_root"] = str(repo_root)
@@ -236,44 +672,20 @@ def open_pr(
         event_details["labels"] = normalized_labels
 
     # Get current branch
-    branch = current_branch(repo_root)
-    if not branch:
-        _debug("current_branch returned no branch")
-        rprint("[red]Error: Not on a git branch[/red]")
-        if event_details is not None:
-            event_details["error"] = "Not on a git branch"
-        return 1
+    branch = preflight["branch"]["name"]
     if event_details is not None:
         event_details["branch"] = branch
 
     # Check if we're in "work start" mode (branch has issue key)
-    issue_key = extract_issue_key_from_branch(branch)
-    if not issue_key:
-        _debug(f"branch '{branch}' does not contain Jira issue key")
-        rprint(f"[yellow]Branch '{branch}' doesn't contain a Jira issue key.[/yellow]")
-        rprint("[cyan]Start work on an issue first:[/cyan]")
-        rprint("  pwm work-start ABC-123")
-        rprint("  pwm work-start --new")
-        if event_details is not None:
-            event_details["error"] = "Branch does not contain Jira issue key"
-        return 1
+    issue_key = preflight["branch"]["issue_key"]
     if event_details is not None:
         event_details["issue_key"] = issue_key
 
-    # Get GitHub repo
-    github_repo = ctx.github_repo
-    if not github_repo:
-        _debug("context has no github_repo configured")
-        rprint("[red]Error: GitHub repo not configured.[/red]")
-        rprint("[cyan]Run 'pwm init' to configure your project.[/cyan]")
-        if event_details is not None:
-            event_details["error"] = "GitHub repo not configured"
-        return 1
+    github_repo = preflight["github_repository"]["resolved_repo"]
 
     # Get GitHub client
     github = GitHubClient.from_config(ctx.config)
     if not github:
-        _debug("GitHubClient.from_config returned None")
         rprint("[red]Error: GitHub not configured.[/red]")
         rprint(
             "[cyan]Set GITHUB_TOKEN or PWM_GITHUB_TOKEN environment variable.[/cyan]"
@@ -282,14 +694,34 @@ def open_pr(
             event_details["error"] = "GitHub not configured"
         return 1
 
+    existing_pr = preflight["existing_pr"]
+    if existing_pr["url"] and existing_pr["source"] == "receipt":
+        rprint("[cyan]Reusing PR receipt for current branch and HEAD.[/cyan]")
+        rprint(existing_pr["url"])
+        if event_details is not None:
+            event_details["existing_pr"] = True
+            event_details["pr_url"] = existing_pr["url"]
+            event_details["pr_source"] = "receipt"
+
+        _write_pr_receipt(
+            repo_root=repo_root,
+            branch=branch,
+            head_sha=preflight["receipt"]["head_sha"],
+            pr_url=existing_pr["url"],
+            labels=normalized_labels,
+        )
+        if open_browser:
+            webbrowser.open(existing_pr["url"])
+            rprint("[cyan]Opened in browser[/cyan]")
+        return 0
+
     # Check if PR already exists
-    existing_pr = github.get_pr_for_branch(github_repo, branch)
-    if existing_pr:
+    if existing_pr["url"]:
         pr_number = existing_pr["number"]
-        pr_url = existing_pr["html_url"]
+        pr_url = existing_pr["url"]
         pr_title = existing_pr["title"]
 
-        if normalized_labels:
+        if normalized_labels and pr_number:
             labels_added = github.add_issue_labels(
                 github_repo, pr_number, normalized_labels
             )
@@ -302,7 +734,19 @@ def open_pr(
             if event_details is not None:
                 event_details["labels_applied"] = labels_added
 
-        display_pr_info(github, github_repo, pr_number, pr_title, pr_url)
+        if pr_number:
+            display_pr_info(github, github_repo, pr_number, pr_title, pr_url)
+        else:
+            rprint(f"[green]PR:[/green] {pr_title}")
+            rprint(pr_url)
+
+        _write_pr_receipt(
+            repo_root=repo_root,
+            branch=branch,
+            head_sha=preflight["receipt"]["head_sha"],
+            pr_url=pr_url,
+            labels=_normalize_labels(_extract_labels(existing_pr) + normalized_labels),
+        )
 
         if event_details is not None:
             event_details["pr_number"] = pr_number
@@ -320,25 +764,20 @@ def open_pr(
         event_details["existing_pr"] = False
 
     # Get configured remote
-    remote = ctx.config.get("git", {}).get("default_remote", "origin")
+    remote = preflight["remote"]["name"]
 
     # Get base branch
-    base_branch_ref = get_default_branch(repo_root, remote)
-    # Extract just the branch name (remove "origin/" prefix)
-    base_branch = (
-        base_branch_ref.split("/")[-1] if "/" in base_branch_ref else base_branch_ref
-    )
+    base_branch_ref = preflight["base_branch"]["ref"]
+    base_branch = preflight["base_branch"]["name"]
 
     # Get commits
-    commits = get_commits_since_base(repo_root, base_branch_ref, remote)
+    commits = preflight["ahead"]["commits"]
     if event_details is not None:
         event_details["commit_count"] = len(commits)
-    if not commits:
+    if not commits and not create_anyway:
         _debug("no commits found since base branch")
         rprint("[yellow]Warning: No commits found on this branch.[/yellow]")
-        if create_anyway:
-            pass
-        elif non_interactive:
+        if non_interactive:
             rprint(
                 "[red]Error: No commits found and non-interactive mode is set. "
                 "Use --create-anyway to proceed.[/red]"
@@ -346,8 +785,8 @@ def open_pr(
             if event_details is not None:
                 event_details["error"] = "No commits found"
             return 1
-        else:
-            create_anyway = Confirm.ask("Create PR anyway?", default=False)
+
+        create_anyway = Confirm.ask("Create PR anyway?", default=False)
         if not create_anyway:
             return 1
 
@@ -446,6 +885,14 @@ def open_pr(
         event_details["pr_title"] = title
 
     display_pr_info(github, github_repo, pr_number, title, pr_url)
+
+    _write_pr_receipt(
+        repo_root=repo_root,
+        branch=branch,
+        head_sha=preflight["receipt"]["head_sha"],
+        pr_url=pr_url,
+        labels=normalized_labels,
+    )
 
     if open_browser:
         webbrowser.open(pr_url)

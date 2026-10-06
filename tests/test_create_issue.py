@@ -2,9 +2,11 @@ import pwm.work.epic_history as epic_history_module
 from pwm.work.create_issue import (
     _resolve_epic_query_to_key,
     build_non_interactive_issue_details,
+    create_new_issue,
     parse_custom_field_values,
     record_epic_in_history,
 )
+from pwm.config import agent_defaults
 
 
 def test_parse_custom_field_values_supports_string_and_json_values():
@@ -147,6 +149,94 @@ def test_build_non_interactive_issue_details_preserves_reporter_override():
 
     assert details is not None
     assert details["custom_fields"]["reporter"] == {"accountId": "acct-manual"}
+
+
+def test_build_non_interactive_issue_details_supports_reporter_none_behavior():
+    class FakeJira:
+        def get_create_metadata(self, _project_key, _issue_type):
+            return {
+                "reporter": {
+                    "name": "Reporter",
+                    "required": True,
+                    "schema": {"type": "user"},
+                }
+            }
+
+        def get_current_account_id(self):
+            return "acct-123"
+
+    details = build_non_interactive_issue_details(
+        jira=FakeJira(),
+        project_key="ABC",
+        config={"jira": {"issue_defaults": {"reporter_behavior": "none"}}},
+        summary="Reporter disabled",
+    )
+
+    assert details is None
+
+
+def test_create_new_issue_applies_agent_defaults_and_cli_precedence(
+    monkeypatch,
+    tmp_path,
+):
+    defaults_path = tmp_path / "agent-defaults.toml"
+    defaults_path.write_text(
+        "\n".join(
+            [
+                "[[defaults]]",
+                'project = "ABC"',
+                'repository = "org/repo"',
+                'issue_type = "Task"',
+                'labels = ["agent-default"]',
+                "[defaults.responsible_team]",
+                'field = "customfield_10370"',
+                'value = "Core"',
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(agent_defaults, "AGENT_DEFAULTS_PATH", defaults_path)
+
+    captured = {}
+
+    class FakeJira:
+        base_url = "https://jira.example.com"
+
+        def get_create_metadata(self, _project_key, _issue_type):
+            return {}
+
+        def create_issue(self, **kwargs):
+            nonlocal captured
+            captured = kwargs
+            return "ABC-123"
+
+    rc = create_new_issue(
+        jira=FakeJira(),
+        project_key="ABC",
+        repo_root=tmp_path,
+        config={
+            "jira": {
+                "issue_defaults": {
+                    "issue_type": "Story",
+                    "labels": ["base-default"],
+                    "custom_fields": {"customfield_base": "x"},
+                }
+            }
+        },
+        github_repo="org/repo",
+        non_interactive=True,
+        summary="Create with defaults",
+        issue_type="Bug",
+        labels=["cli-label"],
+        custom_fields={"customfield_10370": {"value": "CLI"}},
+        save_defaults=False,
+    )
+
+    assert rc == "ABC-123"
+    assert captured["issue_type"] == "Bug"
+    assert captured["labels"] == ["cli-label"]
+    assert captured["custom_fields"]["customfield_base"] == "x"
+    assert captured["custom_fields"]["customfield_10370"] == {"value": "CLI"}
 
 
 def test_build_non_interactive_issue_details_error_includes_field_keys_and_shapes(capsys):

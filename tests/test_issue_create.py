@@ -143,3 +143,45 @@ def test_issue_create_returns_error_when_creation_fails(monkeypatch, tmp_path):
     monkeypatch.setattr(create_module, "resolve_context", lambda: ctx)
 
     assert create_module.issue_create(summary="x") == 1
+
+
+def test_issue_create_preserves_actionable_creation_error(
+    monkeypatch,
+    tmp_path,
+):
+    class FakeJira:
+        base_url = "https://jira.example.com"
+
+    monkeypatch.setattr(
+        create_module.JiraClient,
+        "from_config",
+        classmethod(lambda cls, cfg: FakeJira()),
+    )
+
+    def fake_create_new_issue(*args, **kwargs):
+        details = kwargs.get("creation_details")
+        if isinstance(details, dict):
+            details["error"] = "Failed to create issue: field customfield_10370"
+        return None
+
+    monkeypatch.setattr(create_module, "create_new_issue", fake_create_new_issue)
+
+    meta = ContextMeta(
+        user_config_path=None,
+        project_config_path=None,
+        source_summary="defaults",
+    )
+    ctx = Context(
+        repo_root=tmp_path,
+        config={"jira": {}},
+        github_repo="org/repo",
+        jira_project_key="ABC",
+        meta=meta,
+    )
+    monkeypatch.setattr(create_module, "resolve_context", lambda: ctx)
+
+    details = {}
+    rc = create_module.issue_create(summary="x", event_details=details)
+
+    assert rc == 1
+    assert details["error"] == "Failed to create issue: field customfield_10370"

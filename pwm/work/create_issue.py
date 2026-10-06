@@ -6,6 +6,7 @@ from typing import Optional
 from rich.prompt import Prompt, Confirm
 from rich import print as rprint
 
+from pwm.config.agent_defaults import load_agent_jira_defaults
 from pwm.jira.client import JiraClient
 from pwm.work.epic_history import load_epic_history, upsert_epic_history
 from pwm.work.terminal import ensure_backspace_support
@@ -190,6 +191,8 @@ def build_non_interactive_issue_details(
     if custom_fields:
         resolved_custom_fields.update(custom_fields)
 
+    reporter_behavior = defaults.get("reporter_behavior", "auto")
+
     metadata = jira.get_create_metadata(project_key, resolved_issue_type)
     resolved_parent_epic_key = None
     if parent_epic_key and _is_parent_compatible_issue_type(resolved_issue_type):
@@ -227,6 +230,7 @@ def build_non_interactive_issue_details(
         jira=jira,
         metadata=metadata,
         custom_fields=resolved_custom_fields,
+        reporter_behavior=reporter_behavior,
     )
 
     missing_required_fields: list[tuple[str, str, str]] = []
@@ -302,8 +306,15 @@ def _populate_reporter_field_if_needed(
     jira: JiraClient,
     metadata: dict,
     custom_fields: dict,
+    reporter_behavior: str = "auto",
 ) -> None:
     """Populate Jira reporter with current account when available."""
+    normalized_behavior = str(reporter_behavior or "auto").strip().lower()
+    if normalized_behavior not in {"auto", "self", "none"}:
+        normalized_behavior = "auto"
+    if normalized_behavior == "none":
+        return
+
     if "reporter" not in metadata:
         return
 
@@ -346,6 +357,7 @@ def prompt_for_issue_details(
     default_labels: Optional[list[str]] = None,
     default_parent_epic_key: Optional[str] = None,
     default_custom_fields: Optional[dict] = None,
+    default_reporter_behavior: str = "auto",
 ) -> Optional[dict]:
     """
     Interactively prompt for issue details.
@@ -579,6 +591,7 @@ def prompt_for_issue_details(
             jira=jira,
             metadata=metadata,
             custom_fields=custom_fields,
+            reporter_behavior=default_reporter_behavior,
         )
 
     return {
@@ -646,6 +659,7 @@ def create_new_issue(
     project_key: str,
     repo_root: Path,
     config: dict,
+    github_repo: Optional[str] = None,
     *,
     non_interactive: bool = False,
     summary: Optional[str] = None,
@@ -656,6 +670,7 @@ def create_new_issue(
     epic: Optional[str] = None,
     custom_fields: Optional[dict] = None,
     save_defaults: Optional[bool] = None,
+    creation_details: Optional[dict] = None,
 ) -> Optional[str]:
     """
     Create a new Jira issue interactively.
@@ -663,11 +678,23 @@ def create_new_issue(
     Returns the issue key if successful, None otherwise.
     """
     # Get defaults from config
-    defaults = config.get("jira", {}).get("issue_defaults", {})
+    defaults = _resolve_issue_defaults(
+        config=config,
+        project_key=project_key,
+        repo_root=repo_root,
+        github_repo=github_repo,
+    )
+
+    effective_config = dict(config)
+    jira_config = dict(config.get("jira", {}))
+    jira_config["issue_defaults"] = defaults
+    effective_config["jira"] = jira_config
+
     default_issue_type = defaults.get("issue_type", "Story")
     default_labels = defaults.get("labels", [])
     default_parent_epic_key = defaults.get("parent_epic_key")
     default_custom_fields = defaults.get("custom_fields", {})
+    default_reporter_behavior = defaults.get("reporter_behavior", "auto")
 
     if non_interactive:
         if not summary:
@@ -679,7 +706,7 @@ def create_new_issue(
         details = build_non_interactive_issue_details(
             jira=jira,
             project_key=project_key,
-            config=config,
+            config=effective_config,
             summary=summary,
             description=description,
             issue_type=issue_type,
@@ -697,6 +724,7 @@ def create_new_issue(
             default_labels,
             default_parent_epic_key,
             default_custom_fields,
+            default_reporter_behavior,
         )
 
     if not details:
@@ -715,7 +743,24 @@ def create_new_issue(
     )
 
     if not issue_key:
-        rprint("[red]Failed to create issue.[/red]")
+        failure_message = _format_issue_creation_failure_message(jira)
+        rprint(f"[red]{failure_message}[/red]")
+        if creation_details is not None:
+            creation_details["error"] = failure_message
+            diagnostics = getattr(jira, "last_create_issue_error", None)
+            if isinstance(diagnostics, dict):
+                if diagnostics.get("status_code") is not None:
+                    creation_details["jira_status_code"] = diagnostics[
+                        "status_code"
+                    ]
+                if diagnostics.get("validation_errors"):
+                    creation_details["jira_validation_errors"] = diagnostics[
+                        "validation_errors"
+                    ]
+                if diagnostics.get("error_messages"):
+                    creation_details["jira_error_messages"] = diagnostics[
+                        "error_messages"
+                    ]
         return None
 
     rprint(f"[green]Created issue: {issue_key}[/green]")
@@ -774,3 +819,90 @@ def create_new_issue(
             )
 
     return issue_key
+
+
+def _resolve_issue_defaults(
+    config: dict,
+    project_key: str,
+    repo_root: Path,
+    github_repo: Optional[str],
+) -> dict:
+    """Resolve issue defaults from config and optional agent-defaults file."""
+    configured_defaults = dict(config.get("jira", {}).get("issue_defaults", {}))
+    merged_defaults = dict(configured_defaults)
+
+    merged_custom_fields: dict = {}
+    configured_custom_fields = configured_defaults.get("custom_fields", {})
+    if isinstance(configured_custom_fields, dict):
+        merged_custom_fields.update(configured_custom_fields)
+
+    resolution = load_agent_jira_defaults(
+        project_key=project_key,
+        github_repo=github_repo,
+        repo_name=repo_root.name,
+    )
+    if resolution.warning:
+        rprint(f"[yellow]Warning: {resolution.warning}[/yellow]")
+
+    overrides = resolution.overrides
+    for key in ["issue_type", "labels", "parent_epic_key", "reporter_behavior"]:
+        if key in overrides:
+            merged_defaults[key] = overrides[key]
+
+    override_custom_fields = overrides.get("custom_fields", {})
+    if isinstance(override_custom_fields, dict):
+        merged_custom_fields.update(override_custom_fields)
+
+    if merged_custom_fields:
+        merged_defaults["custom_fields"] = merged_custom_fields
+
+    return merged_defaults
+
+
+def _format_issue_creation_failure_message(jira: JiraClient) -> str:
+    """Build an actionable issue-creation failure message for users/logs."""
+    diagnostics = getattr(jira, "last_create_issue_error", None)
+    if not isinstance(diagnostics, dict):
+        return "Failed to create issue."
+
+    status_code = diagnostics.get("status_code")
+    validation_errors = diagnostics.get("validation_errors") or []
+    error_messages = diagnostics.get("error_messages") or []
+
+    parts: list[str] = []
+    if status_code is not None:
+        parts.append(f"HTTP {status_code}")
+
+    for message in error_messages[:2]:
+        if isinstance(message, str) and message.strip():
+            parts.append(message.strip())
+
+    if validation_errors:
+        rendered_validation: list[str] = []
+        for item in validation_errors[:3]:
+            field_name = item.get("field_name") or item.get("field_id")
+            field_id = item.get("field_id")
+            message = item.get("message")
+            schema = item.get("schema") or {}
+            schema_type = schema.get("type") if isinstance(schema, dict) else None
+
+            pieces: list[str] = []
+            if field_name and field_id and field_name != field_id:
+                pieces.append(f"{field_name} ({field_id})")
+            elif field_name:
+                pieces.append(str(field_name))
+            if message:
+                pieces.append(str(message))
+            if schema_type:
+                pieces.append(f"schema={schema_type}")
+
+            if pieces:
+                rendered_validation.append(": ".join(pieces))
+
+        if rendered_validation:
+            parts.append("Validation errors: " + "; ".join(rendered_validation))
+
+    if parts:
+        return "Failed to create issue: " + " | ".join(parts)
+
+    return "Failed to create issue."

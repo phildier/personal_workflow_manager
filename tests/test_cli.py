@@ -282,6 +282,37 @@ def test_pr_passes_non_interactive_flags(monkeypatch):
     assert logged[0]["command"] == "pr"
 
 
+def test_pr_preflight_outputs_json_and_skips_open_pr(monkeypatch):
+    logged = []
+
+    def fake_open_pr(**_kwargs):
+        raise AssertionError("open_pr should not run in --preflight mode")
+
+    monkeypatch.setattr("pwm.cli.open_pr", fake_open_pr)
+    monkeypatch.setattr(
+        "pwm.cli.preflight_pr",
+        lambda **_kwargs: {
+            "ok": True,
+            "repo_root": "/repo",
+            "blocking_issues": [],
+        },
+    )
+    monkeypatch.setattr(
+        "pwm.cli.append_event",
+        lambda command, args, details: logged.append(
+            {"command": command, "args": args, "details": details}
+        ),
+    )
+
+    result = runner.invoke(app, ["pr", "--preflight", "--label", "ai-assisted"])
+
+    assert result.exit_code == 0
+    assert '"ok": true' in result.stdout
+    assert '"repo_root": "/repo"' in result.stdout
+    assert logged
+    assert logged[0]["args"]["preflight"] is True
+
+
 def test_epic_history_passes_options(monkeypatch):
     captured = {}
 

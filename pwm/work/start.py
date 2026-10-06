@@ -64,6 +64,7 @@ def work_start(
             project_key,
             repo_root,
             ctx.config,
+            github_repo=ctx.github_repo,
             non_interactive=non_interactive,
             summary=summary,
             description=description,
@@ -73,11 +74,14 @@ def work_start(
             epic=epic,
             custom_fields=custom_fields,
             save_defaults=save_defaults,
+            creation_details=event_details,
         )
         if not issue_key:
-            rprint("[yellow]Issue creation cancelled or failed.[/yellow]")
             if event_details is not None:
-                event_details["error"] = "Issue creation cancelled or failed"
+                event_details.setdefault(
+                    "error",
+                    "Issue creation cancelled or failed",
+                )
             return 1
 
     # Get issue summary for branch naming

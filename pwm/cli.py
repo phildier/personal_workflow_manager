@@ -1,6 +1,8 @@
-import typer
-from typing import Optional
+import json
 from time import perf_counter
+from typing import Optional
+
+import typer
 
 from pwm.context.command import show_context
 from pwm.setup.init import init_project
@@ -10,7 +12,7 @@ from pwm.work.create import issue_create
 from pwm.work.create_issue import parse_custom_field_values
 from pwm.work.end import work_end
 from pwm.check.self_check import self_check
-from pwm.pr.open import open_pr
+from pwm.pr.open import open_pr, preflight_pr
 from pwm.summary.command import daily_summary
 from pwm.log.events import append_event
 from pwm.work.epic_history import epic_history_command
@@ -484,6 +486,11 @@ def pr(
         "--non-interactive",
         help="Fail instead of prompting for confirmation",
     ),
+    preflight: bool = typer.Option(
+        False,
+        "--preflight",
+        help="Output read-only PR diagnostics as JSON",
+    ),
 ) -> None:
     """Open or create a pull request for the current branch."""
     started_at = perf_counter()
@@ -499,16 +506,25 @@ def pr(
             normalized_labels.append(stripped_label)
 
     run_details: dict = {}
-    exit_code = open_pr(
-        use_ai=not no_ai,
-        create_anyway=create_anyway,
-        open_browser=not no_open_browser,
-        title_override=title,
-        body_override=body,
-        labels=normalized_labels,
-        non_interactive=non_interactive,
-        event_details=run_details,
-    )
+    if preflight:
+        result = preflight_pr(
+            create_anyway=create_anyway,
+            labels=normalized_labels,
+            event_details=run_details,
+        )
+        typer.echo(json.dumps(result, indent=2, sort_keys=True))
+        exit_code = 0 if result.get("ok") else 1
+    else:
+        exit_code = open_pr(
+            use_ai=not no_ai,
+            create_anyway=create_anyway,
+            open_browser=not no_open_browser,
+            title_override=title,
+            body_override=body,
+            labels=normalized_labels,
+            non_interactive=non_interactive,
+            event_details=run_details,
+        )
     duration_ms = int((perf_counter() - started_at) * 1000)
     append_event(
         command="pr",
@@ -520,6 +536,7 @@ def pr(
             "body": body,
             "labels": normalized_labels,
             "non_interactive": non_interactive,
+            "preflight": preflight,
         },
         details={
             "status": "success" if exit_code == 0 else "error",

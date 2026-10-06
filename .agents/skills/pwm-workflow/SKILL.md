@@ -22,6 +22,7 @@ with a default bias toward a single issue/branch/PR flow.
 - The user needs issue creation without branch changes via `pwm ic`.
 - The user needs `pwm ws --new` without prompt collection.
 - The user needs `pwm pr` creation in non-interactive sessions.
+- The user asks to create/open a PR and expects completion in the same turn.
 
 ## Validate Context First
 
@@ -42,6 +43,9 @@ with a default bias toward a single issue/branch/PR flow.
   `pwm ws <ISSUE-KEY>` instead of creating another issue.
 - Keep one task to one ticket and one PR unless the user explicitly requests
   splitting work.
+- When a user asks for a PR, finish checks/commit/push as needed and run the PR
+  command in the same response. Do not ask for confirmation unless the user
+  explicitly requested a diff review first or a command fails.
 
 ## Core Non-Interactive Commands
 
@@ -58,9 +62,11 @@ with a default bias toward a single issue/branch/PR flow.
 - Create Jira epic only:
   - `pwm ic --non-interactive --summary "Create feature area" --issue-type Epic --no-save-defaults`
 - Create/open PR without interactive confirms or browser launch:
-  - `pwm pr --non-interactive --create-anyway --no-open-browser`
+  - `pwm pr --non-interactive --no-open-browser --label ai-assisted`
 - Create/open PR and apply labels (repeat `--label` as needed):
   - `pwm pr --non-interactive --no-open-browser --label bug --label ai-assisted`
+- Read-only PR diagnostics:
+  - `pwm pr --preflight --non-interactive --label ai-assisted`
 
 ## Required Inputs
 
@@ -68,6 +74,9 @@ with a default bias toward a single issue/branch/PR flow.
 - For `pwm ws --new --non-interactive`, always provide `--summary`.
 - Provide `--issue-type`, `--labels`, `--story-points`, and repeatable
   `--custom-field KEY=VALUE` when project defaults are insufficient.
+- `pwm ws --new` and `pwm ic` automatically apply matching entries from
+  `~/.config/pwm/agent-defaults.toml` (keyed by Jira project and/or
+  repository). Only pass explicit overrides when needed.
 - Use `--epic ABC-123` to set parent epic for supported issue types:
   Story, Bug, Spike, Task, Incident.
 - Use `--issue-type Epic` to create an epic. Do not combine it with `--epic`.
@@ -77,6 +86,10 @@ with a default bias toward a single issue/branch/PR flow.
 - Use `--no-ai` when deterministic PR metadata is preferred.
 - Use repeatable `--label` to apply labels to either an existing PR or a newly
   created PR; no labels are applied unless `--label` is provided.
+- Use `--create-anyway` only when an intentionally no-ahead-commit PR is
+  desired.
+- Before re-running `pwm pr`, inspect `.git/pwm/pr.json` receipt. Re-run PR
+  only when HEAD changed or requested PR metadata changed (for example labels).
 
 ## Label Selection Policy
 
@@ -95,7 +108,14 @@ Return results in this structure:
 1. `Action run`: exact pwm command executed.
 2. `Outcome`: what changed (branch, issue state, PR status).
 3. `Notes`: warnings/skips/degraded behavior.
-4. `Next step`: one concrete follow-up command.
+
+Next-command contract:
+
+- After successful `pwm pr`, return PR URL and validation status; omit
+  `Next step`.
+- After successful `pwm ws` or `pwm ic`, include `Next step` only when the
+  user explicitly asked for end-to-end workflow execution.
+- On failure, include exactly one corrective command as `Next step`.
 
 ## Safety And Fallbacks
 

@@ -55,6 +55,8 @@ other way around.
 
 Global config: `~/.config/pwm/config.toml`
 Project config: `<repo>/.pwm.toml`
+Agent defaults: `~/.config/pwm/agent-defaults.toml` (non-secret Jira defaults for
+automation)
 
 Environment variable overrides (recommended for tokens):
 
@@ -102,6 +104,38 @@ customfield_12345 = "Some default value"
 - **Array values** (multi-select): Use inline array syntax like `FIELD_ID = [{ value = "Option1" }, { value = "Option2" }]`
 
 You can also manually add custom field defaults to your config file. See `example.pwm.toml` for more configuration examples.
+
+**Agent Jira Defaults (project/repository keyed):**
+
+For stable non-secret defaults used by automation (`pwm ws --new` and `pwm ic`),
+add `~/.config/pwm/agent-defaults.toml`:
+
+```toml
+[[defaults]]
+project = "ABC"
+repository = "myorg/myrepo"   # or local repo directory name
+issue_type = "Task"
+labels = ["backend", "api"]
+reporter = "none"             # one of: auto, self, none
+
+[defaults.responsible_team]
+field = "customfield_10370"
+value = "Core"
+
+[defaults.custom_fields]
+customfield_12345 = "Example"
+```
+
+Resolution rules:
+- Each `[[defaults]]` entry may match by `project`, `repository`, or both.
+- The most specific match wins (`project+repository` > `project` or
+  `repository`).
+- `repository` is matched against inferred GitHub `org/repo`; if unavailable,
+  repo directory name is used.
+- Explicit CLI values (`--issue-type`, `--labels`, `--custom-field`) always
+  override defaults.
+- Missing/malformed `agent-defaults.toml` degrades safely and issue creation
+  continues without it.
 
 ----------------------------------------
 
@@ -223,12 +257,21 @@ If you're on a branch with a Jira issue key:
 
 **Options:**
 - `--no-ai`: Skip AI-generated summaries even when OpenAI is configured
-- `--create-anyway` / `-y`: Create PR even when no commits are detected
+- `--create-anyway` / `-y`: Allow intentionally empty PR creation when nothing
+  is ahead of base
 - `--no-open-browser`: Do not open the PR URL in a browser
 - `--title`: Override generated PR title
 - `--body`: Override generated PR description
 - `--label`: Repeatable PR label to apply (only when provided)
 - `--non-interactive`: Fail instead of prompting for confirmation
+- `--preflight`: Read-only JSON diagnostics (no PR creation)
+
+`pwm pr` now runs an automatic preflight before PR creation and fails with a
+specific remediation when requirements are not met (for example missing Jira
+key, no ahead changes, or push issues).
+
+After successful PR creation/discovery, pwm writes a per-worktree receipt at
+`.git/pwm/pr.json` with branch, head SHA, PR URL, and labels.
 
 **AI integration:**
 - When OpenAI is configured, automatically generates two intelligent summaries:
@@ -246,7 +289,9 @@ If you're on a branch with a Jira issue key:
 ```
 pwm pr
 pwm pr --no-ai
-pwm pr --non-interactive --create-anyway --no-open-browser
+pwm pr --preflight --non-interactive --label ai-assisted
+pwm pr --non-interactive --no-open-browser --label ai-assisted
+pwm pr --non-interactive --create-anyway --no-open-browser  # intentional empty PR only
 pwm pr --title "[ABC-123] Manual title" --body "Manual description"
 pwm pr --label bug --label ai-assisted
 ```

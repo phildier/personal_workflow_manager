@@ -318,6 +318,72 @@ def test_create_issue_debug_output_is_sanitized(monkeypatch, capsys):
     assert "{" not in captured.err
 
 
+def test_create_issue_surfaces_safe_validation_details(monkeypatch, capsys):
+    jc = JiraClient(base_url="https://example.atlassian.net", email="u", token="t")
+
+    class ErrorResp:
+        status_code = 400
+
+        def json(self):
+            return {
+                "errorMessages": [
+                    "Request failed",
+                    "Authorization: Bearer top-secret-token",
+                ],
+                "errors": {
+                    "customfield_10370": "Specify a valid value for this field"
+                },
+            }
+
+    class ErrorClient:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def get(self, url, params=None):
+            if url.endswith("/rest/api/3/myself"):
+                return FakeResp(200, {"accountId": "abc"})
+            if url.endswith("/rest/api/3/issue/createmeta"):
+                return FakeResp(
+                    200,
+                    {
+                        "projects": [
+                            {
+                                "issuetypes": [
+                                    {
+                                        "fields": {
+                                            "customfield_10370": {
+                                                "name": "Responsible Team",
+                                                "schema": {"type": "option"},
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                )
+            return FakeResp(404, {})
+
+        def post(self, url, json=None):
+            return ErrorResp()
+
+    monkeypatch.setattr(JiraClient, "_client", lambda self: ErrorClient())
+
+    assert jc.create_issue(project_key="ABC", summary="Test", issue_type="Task") is None
+    captured = capsys.readouterr()
+
+    assert jc.last_create_issue_error is not None
+    errors = jc.last_create_issue_error["validation_errors"]
+    assert errors[0]["field_id"] == "customfield_10370"
+    assert errors[0]["field_name"] == "Responsible Team"
+    assert errors[0]["schema"]["type"] == "option"
+    assert "top-secret-token" not in captured.err
+    assert "<redacted>" in captured.err
+
+
 def test_jira_debug_logging_respects_pwm_debug(monkeypatch, capsys):
     jc = JiraClient(base_url="https://example.atlassian.net", email="u", token="t")
 

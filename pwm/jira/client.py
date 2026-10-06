@@ -1,8 +1,9 @@
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional
 import os
+import re
 import sys
 import httpx
 
@@ -12,6 +13,7 @@ class JiraClient:
     base_url: str
     email: str
     token: str
+    last_create_issue_error: dict | None = field(default=None, init=False)
 
     def _debug(self, message: str) -> None:
         """Emit debug diagnostics when PWM_DEBUG is enabled."""
@@ -292,6 +294,7 @@ class JiraClient:
 
         Returns the issue key (e.g., "ABC-123") if successful, None otherwise.
         """
+        self.last_create_issue_error = None
         url = f"{self.base_url}/rest/api/3/issue"
 
         fields = {
@@ -347,13 +350,28 @@ class JiraClient:
                     data = r.json()
                     return data.get("key")
                 else:
-                    # Keep logs concise and avoid leaking response bodies.
+                    error_details = self._extract_create_issue_error(
+                        response=r,
+                        project_key=project_key,
+                        issue_type=issue_type,
+                    )
+                    self.last_create_issue_error = error_details
+                    safe_summary = self._format_issue_error_summary(error_details)
+
                     self._debug(
                         f"create_issue for {project_key} returned HTTP {r.status_code}"
                     )
-                    print(f"[DEBUG] Jira API error {r.status_code}", file=sys.stderr)
+                    print(
+                        f"[DEBUG] Jira API error {r.status_code}: {safe_summary}",
+                        file=sys.stderr,
+                    )
                     return None
         except Exception as e:
+            self.last_create_issue_error = {
+                "error_messages": [
+                    self._sanitize_message(f"Exception creating issue: {e}")
+                ]
+            }
             self._debug(
                 f"create_issue for {project_key} raised {type(e).__name__}"
             )
@@ -362,6 +380,115 @@ class JiraClient:
                 file=sys.stderr,
             )
             return None
+
+    def _extract_create_issue_error(
+        self,
+        response: httpx.Response,
+        project_key: str,
+        issue_type: str,
+    ) -> dict:
+        """Return sanitized, actionable Jira create-issue validation details."""
+        details: dict = {"status_code": response.status_code}
+
+        body: dict = {}
+        try:
+            parsed = response.json()
+            if isinstance(parsed, dict):
+                body = parsed
+        except Exception:
+            body = {}
+
+        raw_error_messages = body.get("errorMessages")
+        if isinstance(raw_error_messages, list):
+            safe_messages = []
+            for message in raw_error_messages:
+                if isinstance(message, str) and message.strip():
+                    safe_messages.append(self._sanitize_message(message))
+            if safe_messages:
+                details["error_messages"] = safe_messages
+
+        field_errors = body.get("errors")
+        if isinstance(field_errors, dict) and field_errors:
+            metadata = self.get_create_metadata(project_key, issue_type)
+            validation_errors = []
+            for field_id, raw_message in field_errors.items():
+                if not isinstance(field_id, str):
+                    continue
+
+                message_text = ""
+                if isinstance(raw_message, str):
+                    message_text = self._sanitize_message(raw_message)
+                elif raw_message is not None:
+                    message_text = self._sanitize_message(str(raw_message))
+
+                field_meta = metadata.get(field_id, {}) if metadata else {}
+                field_name = field_meta.get("name") if isinstance(field_meta, dict) else None
+
+                schema_summary = {}
+                schema = field_meta.get("schema", {}) if isinstance(field_meta, dict) else {}
+                if isinstance(schema, dict):
+                    for key in ["type", "items", "system", "custom"]:
+                        value = schema.get(key)
+                        if value:
+                            schema_summary[key] = value
+
+                error_item = {
+                    "field_id": field_id,
+                    "field_name": field_name or field_id,
+                    "message": message_text,
+                }
+                if schema_summary:
+                    error_item["schema"] = schema_summary
+                validation_errors.append(error_item)
+
+            if validation_errors:
+                details["validation_errors"] = validation_errors
+
+        return details
+
+    def _sanitize_message(self, message: str) -> str:
+        """Redact obvious secrets from server-provided messages."""
+        cleaned = message.strip()
+        if not cleaned:
+            return cleaned
+
+        patterns = [
+            r"(?i)authorization\s*:\s*[^,;]+",
+            r"(?i)bearer\s+[a-z0-9._\-]+",
+            r"(?i)(token|api[_-]?key|password|secret)\s*[=:]\s*[^\s,;]+",
+        ]
+        for pattern in patterns:
+            cleaned = re.sub(pattern, "<redacted>", cleaned)
+
+        return cleaned
+
+    def _format_issue_error_summary(self, error_details: dict) -> str:
+        """Render compact diagnostics for stderr/debug logging."""
+        parts: list[str] = []
+
+        for message in error_details.get("error_messages", [])[:2]:
+            if isinstance(message, str) and message:
+                parts.append(message)
+
+        validation_errors = error_details.get("validation_errors", [])
+        if isinstance(validation_errors, list):
+            rendered: list[str] = []
+            for item in validation_errors[:3]:
+                if not isinstance(item, dict):
+                    continue
+                field_label = item.get("field_name") or item.get("field_id")
+                field_message = item.get("message")
+                if field_label and field_message:
+                    rendered.append(f"{field_label}: {field_message}")
+                elif field_label:
+                    rendered.append(str(field_label))
+            if rendered:
+                parts.append("validation=" + "; ".join(rendered))
+
+        if not parts:
+            return "No validation details returned by Jira."
+
+        return " | ".join(parts)
 
     def _resolve_parent_epic_field(
         self, project_key: str, issue_type_name: str
