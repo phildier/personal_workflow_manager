@@ -78,6 +78,10 @@ def test_create_pr_failure():
 
     mock_response = Mock()
     mock_response.status_code = 422  # Unprocessable Entity
+    mock_response.json.return_value = {
+        "message": "Validation Failed",
+        "errors": [{"code": "missing_field"}],
+    }
 
     with patch("httpx.Client") as mock_client:
         mock_client.return_value.__enter__.return_value.post.return_value = mock_response
@@ -89,7 +93,10 @@ def test_create_pr_failure():
             base="main"
         )
 
-        assert pr is None
+    assert pr is None
+    assert client.last_error == (
+        "GitHub API returned HTTP 422: Validation Failed (missing_field)"
+    )
 
 
 def test_get_pr_for_branch_exists():

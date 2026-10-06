@@ -258,6 +258,45 @@ def test_open_pr_non_interactive_fails_without_commits(monkeypatch):
     assert rc == 1
 
 
+def test_open_pr_displays_github_creation_error(monkeypatch, capsys):
+    class Ctx:
+        repo_root = Path(".")
+        github_repo = "org/repo"
+        config = {"git": {"default_remote": "origin"}, "jira": {}}
+
+    class FakeGitHub:
+        last_error = "GitHub API returned HTTP 422: Validation Failed (missing_field)"
+
+        def get_pr_for_branch(self, _repo, _branch):
+            return None
+
+        def create_pr(self, repo, title, head, base, body=None):
+            return None
+
+    monkeypatch.setattr("pwm.pr.open.resolve_context", lambda: Ctx())
+    monkeypatch.setattr("pwm.pr.open.current_branch", lambda _repo_root: "ABC-123-test")
+    monkeypatch.setattr(
+        "pwm.pr.open.GitHubClient.from_config",
+        classmethod(lambda cls, cfg: FakeGitHub()),
+    )
+    monkeypatch.setattr("pwm.pr.open.get_default_branch", lambda *_args: "origin/main")
+    monkeypatch.setattr(
+        "pwm.pr.open.get_commits_since_base",
+        lambda *_args: [{"subject": "Commit subject"}],
+    )
+    monkeypatch.setattr("pwm.pr.open.push_branch", lambda *_args: True)
+    monkeypatch.setattr("pwm.pr.open.JiraClient.from_config", classmethod(lambda *_args: None))
+    monkeypatch.setattr(
+        "pwm.ai.openai_client.OpenAIClient.from_config",
+        classmethod(lambda *_args: None),
+    )
+
+    rc = open_pr(open_browser=False, use_ai=False)
+
+    assert rc == 1
+    assert "HTTP 422: Validation Failed (missing_field)" in capsys.readouterr().out
+
+
 def test_open_pr_uses_title_and_body_overrides(monkeypatch):
     class Ctx:
         repo_root = Path(".")

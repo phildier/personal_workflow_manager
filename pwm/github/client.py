@@ -1,7 +1,7 @@
 
 from __future__ import annotations
 from dataclasses import dataclass
-from typing import Optional, Tuple
+from typing import Any, Optional, Tuple
 from datetime import datetime
 import os
 import sys
@@ -13,6 +13,7 @@ DEFAULT_GH_API = "https://api.github.com"
 class GitHubClient:
     base_url: str
     token: str
+    last_error: Optional[str] = None
 
     def _debug(self, message: str) -> None:
         """Emit debug diagnostics when PWM_DEBUG is enabled."""
@@ -113,6 +114,7 @@ class GitHubClient:
         Returns PR object with keys: number, html_url, etc., or None on failure.
         """
         url = f"{self.base_url}/repos/{repo}/pulls"
+        self.last_error = None
         payload = {
             "title": title,
             "head": head,
@@ -126,10 +128,38 @@ class GitHubClient:
                 r = c.post(url, headers=self._headers(), json=payload)
                 if r.status_code == 201:
                     return r.json()
-                self._debug(f"create_pr returned HTTP {r.status_code}")
-        except Exception:
-            self._debug("create_pr request raised exception")
+                self.last_error = self._format_api_error(r.status_code, r.json())
+                self._debug(f"create_pr failed: {self.last_error}")
+        except Exception as error:
+            self.last_error = f"GitHub request failed: {type(error).__name__}"
+            self._debug(f"create_pr request raised {type(error).__name__}")
         return None
+
+    @staticmethod
+    def _format_api_error(status_code: int, response: Any) -> str:
+        """Format GitHub's error response without including request credentials."""
+        error = f"GitHub API returned HTTP {status_code}"
+        if not isinstance(response, dict):
+            return error
+
+        message = response.get("message")
+        if isinstance(message, str) and message:
+            error = f"{error}: {message}"
+
+        details = []
+        errors = response.get("errors")
+        if isinstance(errors, list):
+            for item in errors:
+                if isinstance(item, dict):
+                    detail = item.get("message") or item.get("code")
+                    if isinstance(detail, str) and detail:
+                        details.append(detail)
+                elif isinstance(item, str) and item:
+                    details.append(item)
+        if details:
+            error = f"{error} ({'; '.join(details)})"
+
+        return error
 
     def get_pr_for_branch(self, repo: str, branch: str, state: str = "open") -> Optional[dict]:
         """

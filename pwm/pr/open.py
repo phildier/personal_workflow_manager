@@ -417,9 +417,15 @@ def open_pr(
     if not pr:
         _debug("github.create_pr returned None")
         rprint("[red]Error: Failed to create PR.[/red]")
-        rprint("[dim]Check that your GitHub token has the 'repo' scope.[/dim]")
+        create_error = getattr(github, "last_error", None)
+        if create_error:
+            rprint(f"[dim]{create_error}[/dim]")
+        else:
+            rprint("[dim]Check your GitHub permissions and repository access.[/dim]")
         if event_details is not None:
             event_details["error"] = "Failed to create PR"
+            if create_error:
+                event_details["github_error"] = create_error
         return 1
 
     pr_number = pr["number"]
